@@ -29,10 +29,69 @@ let moment = require('moment');
 let Swal = require('sweetalert2');
 let { ipcRenderer } = require('electron');
 let dotInterval = setInterval(function () { $(".dot").text('.') }, 3000);
-let Store = require('electron-store');
-const remote = require('electron').remote;
+const remote = require('@electron/remote');
 const app = remote.app;
+console.log('Remote app loaded:', app ? 'Success' : 'Failed');
 let img_path = app.getPath('appData') + '/POS/uploads/';
+console.log('POS.js loaded - img_path:', img_path);
+
+// Fast localStorage-based storage (no external dependencies)
+console.log('Initializing fast storage...');
+
+class SimpleStorage {
+    constructor() {
+        this.storageKey = 'pos_storage_v1';
+        this.data = {};
+        this.load();
+    }
+    
+    load() {
+        try {
+            const saved = localStorage.getItem(this.storageKey);
+            if (saved) {
+                this.data = JSON.parse(saved);
+                console.log('Storage loaded with keys:', Object.keys(this.data));
+            } else {
+                console.log('No previous storage found, starting fresh');
+            }
+        } catch (e) {
+            console.warn('Storage load error:', e);
+            this.data = {};
+        }
+    }
+    
+    save() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+        } catch (e) {
+            console.error('Save error:', e);
+        }
+    }
+    
+    get(key) {
+        return this.data[key];
+    }
+    
+    set(key, value) {
+        this.data[key] = value;
+        this.save();
+        return value;
+    }
+    
+    delete(key) {
+        delete this.data[key];
+        this.save();
+    }
+    
+    clear() {
+        this.data = {};
+        localStorage.removeItem(this.storageKey);
+    }
+}
+
+let storage = new SimpleStorage();
+console.log('✓ Storage initialized successfully!');
+
 let api = 'http://' + host + ':' + port + '/api/';
 let btoa = require('btoa');
 let jsPDF = require('jspdf');
@@ -49,7 +108,7 @@ let auth_error = 'Incorrect username or password';
 let auth_empty = 'Please enter a username and password';
 let holdOrderlocation = $("#randerHoldOrders");
 let customerOrderLocation = $("#randerCustomerOrders");
-let storage = new Store();
+// storage already initialized above with remote app
 let settings;
 let platform;
 let user = {};
@@ -109,22 +168,31 @@ $.fn.serializeObject = function () {
 };
 
 
+console.log('Checking authentication...');
 auth = storage.get('auth');
 user = storage.get('user');
-
+console.log('Auth status:', auth ? 'Authenticated' : 'Not authenticated');
 
 if (auth == undefined) {
-    $.get(api + 'users/check/', function (data) { });
+    console.log('No auth found, checking API and showing login...');
+    $.get(api + 'users/check/', function (data) {
+        console.log('Users check completed');
+    }).fail(function(err) {
+        console.error('Failed to check users API:', err);
+    });
     $("#loading").show();
     authenticate();
 
 } else {
-
+    console.log('User authenticated, loading app...');
     $('#loading').show();
 
     setTimeout(function () {
         $('#loading').hide();
-    }, 2000);
+        $('.loading').hide();
+        $('.loading').css('display', 'none');
+        console.log('✓ Initial loading hidden');
+    }, 800);
 
     platform = storage.get('settings');
 
@@ -136,30 +204,54 @@ if (auth == undefined) {
         }
     }
 
+    console.log('Loading user data for ID:', user._id);
     $.get(api + 'users/user/' + user._id, function (data) {
         user = data;
         $('#loggedin-user').text(user.fullname);
+        console.log('User loaded:', user.fullname);
+    }).fail(function(err) {
+        console.error('Failed to load user:', err);
     });
 
-
+    console.log('Loading settings...');
     $.get(api + 'settings/get', function (data) {
         settings = data.settings;
+        console.log('Settings loaded:', settings);
+    }).fail(function(err) {
+        console.error('Failed to load settings:', err);
     });
 
-
+    console.log('Loading all users...');
     $.get(api + 'users/all', function (users) {
         allUsers = [...users];
+        console.log('All users loaded, count:', allUsers.length);
+    }).fail(function(err) {
+        console.error('Failed to load all users:', err);
     });
 
 
 
     $(document).ready(function () {
+        console.log('Document ready - initializing POS interface...');
 
+        // Force hide all loading indicators
         $(".loading").hide();
+        $(".loading").css('display', 'none');
+        console.log('Loading indicators hidden');
 
+        console.log('Loading categories...');
         loadCategories();
+        console.log('Loading products...');
         loadProducts();
+        console.log('Loading customers...');
         loadCustomers();
+        
+        // Ensure loading is hidden after a short delay
+        setTimeout(function() {
+            $(".loading").hide();
+            $(".loading").css('display', 'none');
+            console.log('✓ Loading indicators force hidden');
+        }, 300);
 
 
         if (settings && settings.symbol) {
@@ -168,15 +260,24 @@ if (auth == undefined) {
 
 
         setTimeout(function () {
+            // Force hide loading again
+            $(".loading").hide();
+            $(".loading").css('display', 'none');
+            
             if (settings == undefined && auth != undefined) {
+                console.log('⚠ Settings not configured, opening settings modal...');
                 $('#settingsModal').modal('show');
+                // Hide loading when settings modal opens
+                $(".loading").hide();
+                $(".loading").css('display', 'none');
             }
             else {
                 vat = parseFloat(settings.percentage);
                 $("#taxInfo").text(settings.charge_tax ? vat : 0);
+                console.log('✓ Settings loaded, VAT:', vat);
             }
 
-        }, 1500);
+        }, 1000);
 
 
 
@@ -709,17 +810,24 @@ if (auth == undefined) {
             }
 
 
+            console.log('💳 Processing payment...');
             $(".loading").show();
-
+            
+            // Safety timeout - hide loading after 10 seconds no matter what
+            let loadingTimeout = setTimeout(function() {
+                $(".loading").hide();
+                console.error('⚠️ Payment timeout - loading hidden after 10s');
+            }, 10000);
 
             if (holdOrder != 0) {
-
                 orderNumber = holdOrder;
-                method = 'PUT'
+                method = 'PUT';
+                console.log('Updating existing order:', orderNumber);
             }
             else {
                 orderNumber = Math.floor(Date.now() / 1000);
-                method = 'POST'
+                method = 'POST';
+                console.log('Creating new order:', orderNumber);
             }
 
 
@@ -789,21 +897,26 @@ if (auth == undefined) {
 
             if (status == 3) {
                 if (cart.length > 0) {
-
+                    console.log('🖨️ Printing receipt only (status 3)');
                     printJS({ printable: receipt, type: 'raw-html' });
-
                     $(".loading").hide();
+                    console.log('✓ Receipt printed, loading hidden');
                     return;
-
                 }
                 else {
-
+                    console.log('⚠️ No items to print');
                     $(".loading").hide();
                     return;
                 }
             }
 
 
+            // Ensure platform has default values
+            if (!platform) {
+                platform = { till: 1, mac: 'default', app: 'Standalone Point of Sale' };
+                console.log('⚠️ Platform not configured, using defaults:', platform);
+            }
+            
             let data = {
                 order: orderNumber,
                 ref_number: refNumber,
@@ -821,13 +934,16 @@ if (auth == undefined) {
                 paid: paid,
                 change: change,
                 _id: orderNumber,
-                till: platform.till,
-                mac: platform.mac,
+                till: platform.till || 1,
+                mac: platform.mac || 'default',
                 user: user.fullname,
                 user_id: user._id
             }
 
 
+            console.log('Sending payment to API:', method, api + 'new');
+            console.log('Payment data:', { orderNumber, customer: customer ? customer.name : 'Walk-in', total: orderTotal, paid, status });
+            
             $.ajax({
                 url: api + 'new',
                 type: method,
@@ -835,8 +951,11 @@ if (auth == undefined) {
                 contentType: 'application/json; charset=utf-8',
                 cache: false,
                 processData: false,
-                success: function (data) {
-
+                timeout: 8000, // 8 second timeout
+                success: function (response) {
+                    clearTimeout(loadingTimeout);
+                    console.log('✅ Payment successful!', response);
+                    
                     cart = [];
                     $('#viewTransaction').html('');
                     $('#viewTransaction').html(receipt);
@@ -849,12 +968,23 @@ if (auth == undefined) {
                     $(this).getHoldOrders();
                     $(this).getCustomerOrders();
                     $(this).renderTable(cart);
+                    
+                    console.log('✓ Payment complete, receipt shown');
 
-                }, error: function (data) {
+                }, 
+                error: function (xhr, status, error) {
+                    clearTimeout(loadingTimeout);
                     $(".loading").hide();
+                    console.error('❌ Payment failed:', status, error);
+                    console.error('Response:', xhr.responseText);
+                    
                     $("#dueModal").modal('toggle');
-                    swal("Something went wrong!", 'Please refresh this page and try again');
-
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Payment Failed!',
+                        text: 'Error: ' + (error || 'Unknown error') + '. Please try again.',
+                        confirmButtonText: 'OK'
+                    });
                 }
             });
 
@@ -1800,8 +1930,10 @@ if (auth == undefined) {
 
         $('#add-user').click(function () {
 
-            if (platform.app != 'Network Point of Sale Terminal') {
+            if (platform && platform.app != 'Network Point of Sale Terminal') {
                 $('.perms').show();
+            } else if (!platform) {
+                $('.perms').show(); // Show permissions if platform not configured
             }
 
             $("#saveUser").get(0).reset();
@@ -1813,7 +1945,7 @@ if (auth == undefined) {
 
         $('#settings').click(function () {
 
-            if (platform.app == 'Network Point of Sale Terminal') {
+            if (platform && platform.app == 'Network Point of Sale Terminal') {
                 $('#net_settings_form').show(500);
                 $('#settings_form').hide(500);
 

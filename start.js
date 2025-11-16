@@ -3,9 +3,13 @@ const setupEvents = require('./installers/setupEvents')
     return;
  }
 
+console.log('Starting POS Application...');
 const server = require('./server');
+console.log('Express server module loaded');
 const {app, BrowserWindow, ipcMain, screen} = require('electron');
 const path = require('path')
+const remoteMain = require('@electron/remote/main');
+remoteMain.initialize();
 
 const contextMenu = require('electron-context-menu');
 
@@ -31,9 +35,16 @@ function createWindow() {
   mainWindow.maximize();
   mainWindow.show();
 
+  // Enable remote module for this window
+  remoteMain.enable(mainWindow.webContents);
+  console.log('Remote module enabled for main window');
+
   mainWindow.loadURL(
     `file://${path.join(__dirname, 'index.html')}`
   )
+
+  // DevTools enabled for debugging
+  mainWindow.webContents.openDevTools();
 
   mainWindow.on('closed', () => {
     mainWindow = null
