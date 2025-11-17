@@ -1,148 +1,271 @@
-let app = require("express")();
-let server = require("http").Server(app);
-let bodyParser = require("body-parser");
-let Datastore = require("nedb");
-let Inventory = require("./inventory");
+/**
+ * Transactions API - Sales transaction endpoints
+ * Refactored with async/await and error handling
+ */
+
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+const Datastore = require('nedb');
+const Inventory = require('./inventory');
 
 app.use(bodyParser.json());
 
 module.exports = app;
- 
-let transactionsDB = new Datastore({
-  filename: process.env.APPDATA+"/POS/server/databases/transactions.db",
-  autoload: true
-});
 
+// Initialize database
+const transactionsDB = new Datastore({
+    filename: process.env.APPDATA + '/POS/server/databases/transactions.db',
+    autoload: true
+});
 
 transactionsDB.ensureIndex({ fieldName: '_id', unique: true });
 
-app.get("/", function(req, res) {
-  res.send("Transactions API");
+/**
+ * Health check endpoint
+ */
+app.get('/', (req, res) => {
+    res.send('Transactions API');
 });
 
- 
-app.get("/all", function(req, res) {
-  transactionsDB.find({}, function(err, docs) {
-    res.send(docs);
-  });
-});
-
-
-
- 
-app.get("/on-hold", function(req, res) {
-  transactionsDB.find(
-    { $and: [{ ref_number: {$ne: ""}}, { status: 0  }]},    
-    function(err, docs) {
-      if (docs) res.send(docs);
+/**
+ * Get all transactions
+ */
+app.get('/all', async (req, res) => {
+    try {
+        transactionsDB.find({}, (err, docs) => {
+            if (err) {
+                console.error('Error finding transactions:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(docs);
+        });
+    } catch (error) {
+        console.error('Error in get all transactions:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  );
 });
 
-
-
-app.get("/customer-orders", function(req, res) {
-  transactionsDB.find(
-    { $and: [{ customer: {$ne: "0"} }, { status: 0}, { ref_number: ""}]},
-    function(err, docs) {
-      if (docs) res.send(docs);
+/**
+ * Get held orders (open tabs)
+ */
+app.get('/on-hold', async (req, res) => {
+    try {
+        transactionsDB.find(
+            { $and: [{ ref_number: { $ne: '' } }, { status: 0 }] },
+            (err, docs) => {
+                if (err) {
+                    console.error('Error finding held orders:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                res.json(docs || []);
+            }
+        );
+    } catch (error) {
+        console.error('Error in get held orders:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  );
 });
 
+/**
+ * Get customer orders
+ */
+app.get('/customer-orders', async (req, res) => {
+    try {
+        transactionsDB.find(
+            { $and: [{ customer: { $ne: '0' } }, { status: 0 }, { ref_number: '' }] },
+            (err, docs) => {
+                if (err) {
+                    console.error('Error finding customer orders:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                res.json(docs || []);
+            }
+        );
+    } catch (error) {
+        console.error('Error in get customer orders:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
+/**
+ * Get transactions by date range
+ */
+app.get('/by-date', async (req, res) => {
+    try {
+        const startDate = new Date(req.query.start);
+        const endDate = new Date(req.query.end);
+        const userId = parseInt(req.query.user) || 0;
+        const tillId = parseInt(req.query.till) || 0;
+        const status = parseInt(req.query.status);
 
-app.get("/by-date", function(req, res) {
-
-  let startDate = new Date(req.query.start);
-  let endDate = new Date(req.query.end);
-
-  if(req.query.user == 0 && req.query.till == 0) {
-      transactionsDB.find(
-        { $and: [{ date: { $gte: startDate.toJSON(), $lte: endDate.toJSON() }}, { status: parseInt(req.query.status) }] },
-        function(err, docs) {
-          if (docs) res.send(docs);
+        // Validate dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            return res.status(400).json({ error: 'Invalid date format' });
         }
-      );
-  }
 
-  if(req.query.user != 0 && req.query.till == 0) {
-    transactionsDB.find(
-      { $and: [{ date: { $gte: startDate.toJSON(), $lte: endDate.toJSON() }}, { status: parseInt(req.query.status) }, { user_id: parseInt(req.query.user) }] },
-      function(err, docs) {
-        if (docs) res.send(docs);
-      }
-    );
-  }
+        // Build query based on filters
+        let query = {
+            $and: [
+                { date: { $gte: startDate.toJSON(), $lte: endDate.toJSON() } },
+                { status: status }
+            ]
+        };
 
-  if(req.query.user == 0 && req.query.till != 0) {
-    transactionsDB.find(
-      { $and: [{ date: { $gte: startDate.toJSON(), $lte: endDate.toJSON() }}, { status: parseInt(req.query.status) }, { till: parseInt(req.query.till) }] },
-      function(err, docs) {
-        if (docs) res.send(docs);
-      }
-    );
-  }
+        if (userId !== 0) {
+            query.$and.push({ user_id: userId });
+        }
 
-  if(req.query.user != 0 && req.query.till != 0) {
-    transactionsDB.find(
-      { $and: [{ date: { $gte: startDate.toJSON(), $lte: endDate.toJSON() }}, { status: parseInt(req.query.status) }, { till: parseInt(req.query.till) }, { user_id: parseInt(req.query.user) }] },
-      function(err, docs) {
-        if (docs) res.send(docs);
-      }
-    );
-  }
+        if (tillId !== 0) {
+            query.$and.push({ till: tillId });
+        }
 
-});
+        transactionsDB.find(query, (err, docs) => {
+            if (err) {
+                console.error('Error finding transactions by date:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(docs || []);
+        });
 
-
-
-app.post("/new", function(req, res) {
-  let newTransaction = req.body;
-  transactionsDB.insert(newTransaction, function(err, transaction) {    
-    if (err) res.status(500).send(err);
-    else {
-     res.sendStatus(200);
-
-     if(newTransaction.paid >= newTransaction.total){
-        Inventory.decrementInventory(newTransaction.items);
-     }
-     
+    } catch (error) {
+        console.error('Error in get transactions by date:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  });
 });
 
+/**
+ * Create new transaction
+ */
+app.post('/new', async (req, res) => {
+    try {
+        const newTransaction = req.body;
 
+        // Validate required fields
+        if (!newTransaction.items || !Array.isArray(newTransaction.items)) {
+            return res.status(400).json({ error: 'Items array is required' });
+        }
 
-app.put("/new", function(req, res) {
-  let oderId = req.body._id;
-  transactionsDB.update( {
-      _id: oderId
-  }, req.body, {}, function (
-      err,
-      numReplaced,
-      order
-  ) {
-      if ( err ) res.status( 500 ).send( err );
-      else res.sendStatus( 200 );
-  } );
+        if (!newTransaction.total) {
+            return res.status(400).json({ error: 'Total amount is required' });
+        }
+
+        transactionsDB.insert(newTransaction, (err, transaction) => {
+            if (err) {
+                console.error('Error creating transaction:', err);
+                return res.status(500).json({ error: 'Failed to create transaction' });
+            }
+
+            // Decrement inventory if fully paid
+            if (newTransaction.paid && parseFloat(newTransaction.paid) >= parseFloat(newTransaction.total)) {
+                Inventory.decrementInventory(newTransaction.items);
+                console.log('✓ Transaction completed, inventory decremented');
+            }
+
+            res.sendStatus(200);
+        });
+
+    } catch (error) {
+        console.error('Error in create transaction:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
+/**
+ * Update existing transaction
+ */
+app.put('/new', async (req, res) => {
+    try {
+        const orderId = req.body._id;
 
-app.post( "/delete", function ( req, res ) {
- let transaction = req.body;
-  transactionsDB.remove( {
-      _id: transaction.orderId
-  }, function ( err, numRemoved ) {
-      if ( err ) res.status( 500 ).send( err );
-      else res.sendStatus( 200 );
-  } );
-} );
+        if (!orderId) {
+            return res.status(400).json({ error: 'Order ID is required' });
+        }
 
+        transactionsDB.update(
+            { _id: orderId },
+            req.body,
+            {},
+            (err, numReplaced) => {
+                if (err) {
+                    console.error('Error updating transaction:', err);
+                    return res.status(500).json({ error: 'Failed to update transaction' });
+                }
 
+                if (numReplaced === 0) {
+                    return res.status(404).json({ error: 'Transaction not found' });
+                }
 
-app.get("/:transactionId", function(req, res) {
-  transactionsDB.find({ _id: req.params.transactionId }, function(err, doc) {
-    if (doc) res.send(doc[0]);
-  });
+                // Decrement inventory if now fully paid
+                if (req.body.paid && parseFloat(req.body.paid) >= parseFloat(req.body.total)) {
+                    Inventory.decrementInventory(req.body.items);
+                    console.log('✓ Transaction updated, inventory decremented');
+                }
+
+                res.sendStatus(200);
+            }
+        );
+
+    } catch (error) {
+        console.error('Error in update transaction:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Delete transaction
+ */
+app.post('/delete', async (req, res) => {
+    try {
+        const orderId = req.body.orderId;
+
+        if (!orderId) {
+            return res.status(400).json({ error: 'Order ID is required' });
+        }
+
+        transactionsDB.remove({ _id: orderId }, (err, numRemoved) => {
+            if (err) {
+                console.error('Error deleting transaction:', err);
+                return res.status(500).json({ error: 'Failed to delete transaction' });
+            }
+
+            if (numRemoved === 0) {
+                return res.status(404).json({ error: 'Transaction not found' });
+            }
+
+            res.sendStatus(200);
+        });
+
+    } catch (error) {
+        console.error('Error in delete transaction:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Get transaction by ID
+ */
+app.get('/:transactionId', async (req, res) => {
+    try {
+        if (!req.params.transactionId) {
+            return res.status(400).json({ error: 'Transaction ID is required' });
+        }
+
+        transactionsDB.find({ _id: req.params.transactionId }, (err, docs) => {
+            if (err) {
+                console.error('Error finding transaction:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (!docs || docs.length === 0) {
+                return res.status(404).json({ error: 'Transaction not found' });
+            }
+
+            res.json(docs[0]);
+        });
+
+    } catch (error) {
+        console.error('Error in get transaction:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });

@@ -1,174 +1,300 @@
-const app = require( "express")();
-const server = require( "http" ).Server( app );
-const bodyParser = require( "body-parser" );
-const Datastore = require( "nedb" );
+/**
+ * Users API - User management endpoints
+ * Refactored with async/await and error handling
+ */
+
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+const Datastore = require('nedb');
 const btoa = require('btoa');
-app.use( bodyParser.json() );
+
+app.use(bodyParser.json());
 
 module.exports = app;
 
- 
-let usersDB = new Datastore( {
-    filename: process.env.APPDATA+"/POS/server/databases/users.db",
+// Initialize database
+const usersDB = new Datastore({
+    filename: process.env.APPDATA + '/POS/server/databases/users.db',
     autoload: true
-} );
-
+});
 
 usersDB.ensureIndex({ fieldName: '_id', unique: true });
 
+/**
+ * Health check endpoint
+ */
+app.get('/', (req, res) => {
+    res.send('Users API');
+});
 
-app.get( "/", function ( req, res ) {
-    res.send( "Users API" );
-} );
+/**
+ * Get user by ID
+ */
+app.get('/user/:userId', async (req, res) => {
+    try {
+        if (!req.params.userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
 
-
-  
-app.get( "/user/:userId", function ( req, res ) {
-    if ( !req.params.userId ) {
-        res.status( 500 ).send( "ID field is required." );
-    }
-    else{
-    usersDB.findOne( {
-        _id: parseInt(req.params.userId)
-}, function ( err, docs ) {
-        res.send( docs );
-    } );
-    }
-} );
-
-
-
-app.get( "/logout/:userId", function ( req, res ) {
-    if ( !req.params.userId ) {
-        res.status( 500 ).send( "ID field is required." );
-    }
-    else{ usersDB.update( {
-            _id: parseInt(req.params.userId)
-        }, {
-            $set: {
-                status: 'Logged Out_'+ new Date()
+        usersDB.findOne({ _id: parseInt(req.params.userId) }, (err, user) => {
+            if (err) {
+                console.error('Error finding user:', err);
+                return res.status(500).json({ error: 'Database error' });
             }
-        }, {},
-    );
 
-    res.sendStatus( 200 );
- 
-    }
-});
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
 
-
-
-app.post( "/login", function ( req, res ) {  
-    usersDB.findOne( {
-        username: req.body.username,
-        password: btoa(req.body.password)
-
-}, function ( err, docs ) {
-        if(docs) {
-            usersDB.update( {
-                _id: docs._id
-            }, {
-                $set: {
-                    status: 'Logged In_'+ new Date()
-                }
-            }, {},
-            
-        );
-        }
-        res.send( docs );
-    } );
-    
-} );
-
-
-
-
-app.get( "/all", function ( req, res ) {
-    usersDB.find( {}, function ( err, docs ) {
-        res.send( docs );
-    } );
-} );
-
-
-
-app.delete( "/user/:userId", function ( req, res ) {
-    usersDB.remove( {
-        _id: parseInt(req.params.userId)
-    }, function ( err, numRemoved ) {
-        if ( err ) res.status( 500 ).send( err );
-        else res.sendStatus( 200 );
-    } );
-} );
-
- 
-app.post( "/post" , function ( req, res ) {   
-    let User = { 
-            "username": req.body.username,
-            "password": btoa(req.body.password),
-            "fullname": req.body.fullname,
-            "perm_products": req.body.perm_products == "on" ? 1 : 0,
-            "perm_categories": req.body.perm_categories == "on" ? 1 : 0,
-            "perm_transactions": req.body.perm_transactions == "on" ? 1 : 0,
-            "perm_users": req.body.perm_users == "on" ? 1 : 0,
-            "perm_settings": req.body.perm_settings == "on" ? 1 : 0,
-            "status": ""
-          }
-
-    if(req.body.id == "") { 
-       User._id = Math.floor(Date.now() / 1000);
-       usersDB.insert( User, function ( err, user ) {
-            if ( err ) res.status( 500 ).send( req );
-            else res.send( user );
+            res.json(user);
         });
-    }
-    else { 
-        usersDB.update( {
-            _id: parseInt(req.body.id)
-                    }, {
-                        $set: {
-                            username: req.body.username,
-                            password: btoa(req.body.password),
-                            fullname: req.body.fullname,
-                            perm_products: req.body.perm_products == "on" ? 1 : 0,
-                            perm_categories: req.body.perm_categories == "on" ? 1 : 0,
-                            perm_transactions: req.body.perm_transactions == "on" ? 1 : 0,
-                            perm_users: req.body.perm_users == "on" ? 1 : 0,
-                            perm_settings: req.body.perm_settings == "on" ? 1 : 0
-                        }
-                    }, {}, function (
-            err,
-            numReplaced,
-            user
-        ) {
-            if ( err ) res.status( 500 ).send( err );
-            else res.sendStatus( 200 );
-        } );
 
+    } catch (error) {
+        console.error('Error in get user:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-
 });
 
-
-app.get( "/check", function ( req, res ) {
-    usersDB.findOne( {
-        _id: 1
-}, function ( err, docs ) {
-        if(!docs) {
-            let User = { 
-                "_id": 1,
-                "username": "admin",
-                "password": btoa("admin"),
-                "fullname": "Administrator",
-                "perm_products": 1,
-                "perm_categories": 1,
-                "perm_transactions": 1,
-                "perm_users": 1,
-                "perm_settings": 1,
-                "status": ""
-              }
-            usersDB.insert( User, function ( err, user ) {                            
-            });
+/**
+ * Logout user
+ */
+app.get('/logout/:userId', async (req, res) => {
+    try {
+        if (!req.params.userId) {
+            return res.status(400).json({ error: 'User ID is required' });
         }
-    } );
-} );
- 
+
+        usersDB.update(
+            { _id: parseInt(req.params.userId) },
+            { $set: { status: 'Logged Out_' + new Date().toISOString() } },
+            {},
+            (err, numReplaced) => {
+                if (err) {
+                    console.error('Error logging out user:', err);
+                    return res.status(500).json({ error: 'Failed to logout user' });
+                }
+
+                if (numReplaced === 0) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+
+                console.log(`✓ User ${req.params.userId} logged out`);
+                res.sendStatus(200);
+            }
+        );
+
+    } catch (error) {
+        console.error('Error in logout:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Login user
+ */
+app.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        usersDB.findOne(
+            {
+                username: username,
+                password: btoa(password)
+            },
+            (err, user) => {
+                if (err) {
+                    console.error('Error during login:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                if (!user) {
+                    console.log(`⚠ Failed login attempt for username: ${username}`);
+                    return res.json({});
+                }
+
+                // Update login status
+                usersDB.update(
+                    { _id: user._id },
+                    { $set: { status: 'Logged In_' + new Date().toISOString() } },
+                    {},
+                    (err) => {
+                        if (err) {
+                            console.error('Error updating login status:', err);
+                        }
+                    }
+                );
+
+                console.log(`✓ User logged in: ${user.fullname}`);
+                res.json(user);
+            }
+        );
+
+    } catch (error) {
+        console.error('Error in login:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Get all users
+ */
+app.get('/all', async (req, res) => {
+    try {
+        usersDB.find({}, (err, users) => {
+            if (err) {
+                console.error('Error finding users:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(users);
+        });
+    } catch (error) {
+        console.error('Error in get all users:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Delete user
+ */
+app.delete('/user/:userId', async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+
+        if (userId === 1) {
+            return res.status(403).json({ error: 'Cannot delete admin user' });
+        }
+
+        usersDB.remove({ _id: userId }, (err, numRemoved) => {
+            if (err) {
+                console.error('Error deleting user:', err);
+                return res.status(500).json({ error: 'Failed to delete user' });
+            }
+
+            if (numRemoved === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            res.sendStatus(200);
+        });
+
+    } catch (error) {
+        console.error('Error in delete user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Create or update user
+ */
+app.post('/post', async (req, res) => {
+    try {
+        const userData = req.body;
+
+        if (!userData.username || !userData.password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        const User = {
+            username: userData.username,
+            password: btoa(userData.password),
+            fullname: userData.fullname || '',
+            perm_products: userData.perm_products === 'on' ? 1 : 0,
+            perm_categories: userData.perm_categories === 'on' ? 1 : 0,
+            perm_transactions: userData.perm_transactions === 'on' ? 1 : 0,
+            perm_users: userData.perm_users === 'on' ? 1 : 0,
+            perm_settings: userData.perm_settings === 'on' ? 1 : 0,
+            status: ''
+        };
+
+        if (!userData.id || userData.id === '') {
+            // Create new user
+            User._id = Math.floor(Date.now() / 1000);
+            
+            usersDB.insert(User, (err, user) => {
+                if (err) {
+                    console.error('Error creating user:', err);
+                    return res.status(500).json({ error: 'Failed to create user' });
+                }
+                console.log('✓ User created:', user.username);
+                res.json(user);
+            });
+        } else {
+            // Update existing user
+            usersDB.update(
+                { _id: parseInt(userData.id) },
+                { $set: User },
+                {},
+                (err, numReplaced) => {
+                    if (err) {
+                        console.error('Error updating user:', err);
+                        return res.status(500).json({ error: 'Failed to update user' });
+                    }
+
+                    if (numReplaced === 0) {
+                        return res.status(404).json({ error: 'User not found' });
+                    }
+
+                    console.log('✓ User updated:', User.username);
+                    res.sendStatus(200);
+                }
+            );
+        }
+
+    } catch (error) {
+        console.error('Error in save user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Ensure default admin user exists
+ */
+app.get('/check', async (req, res) => {
+    try {
+        usersDB.findOne({ _id: 1 }, (err, user) => {
+            if (err) {
+                console.error('Error checking default admin:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (!user) {
+                const Admin = {
+                    _id: 1,
+                    username: 'admin',
+                    password: btoa('admin'),
+                    fullname: 'Administrator',
+                    perm_products: 1,
+                    perm_categories: 1,
+                    perm_transactions: 1,
+                    perm_users: 1,
+                    perm_settings: 1,
+                    status: ''
+                };
+
+                usersDB.insert(Admin, (err) => {
+                    if (err) {
+                        console.error('Error creating default admin:', err);
+                        return res.status(500).json({ error: 'Failed to create admin user' });
+                    }
+                    console.log('✓ Default admin user created');
+                    res.sendStatus(200);
+                });
+            } else {
+                res.sendStatus(200);
+            }
+        });
+
+    } catch (error) {
+        console.error('Error in check admin:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});

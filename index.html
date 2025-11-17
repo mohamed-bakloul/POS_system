@@ -13,6 +13,23 @@
     <link href="assets/plugins/dataTables/jquery.dataTables.min.css" rel="stylesheet" type="text/css" />
     <link href="assets/plugins/dataTables/dataTables.bootstrap.min.css" rel="stylesheet" type="text/css" />    
     <link href="assets/css/pages.css" rel="stylesheet" type="text/css" />
+    <style>
+        /* Sidebar hover effects */
+        .sidebar-menu button:hover {
+            background: rgba(255,255,255,0.2) !important;
+            transform: translateX(5px);
+        }
+        
+        /* Smooth transitions for sidebar */
+        #transactions_sidebar {
+            transition: all 0.3s ease;
+        }
+        
+        /* Adjust main container when sidebar is visible */
+        .main_app {
+            transition: margin-left 0.3s ease;
+        }
+    </style>
     </head>
   <body>
     
@@ -23,32 +40,14 @@
         <div class="row">
                 <div class="col-sm-12">
 
-                             <div class="button-list pull-left m-t-15 m-l-10">  
-                        
-                            <div class="btn-group p_one">
-                            <button id="productModal" data-toggle="modal" data-target="#Products" type="button" class="btn btn-default waves-effect waves-light">
-                                    <span class="btn-label"><i class=" 	glyphicon glyphicon-barcode"></i> </span>  Products   
-                            </button>
-                            <button id="newProductModal" data-toggle="modal" data-target="#newProduct" type="button" class="btn btn-warning waves-effect waves-light">
-                                    <i class="fa fa-plus"></i> 
-                            </button>
-                            </div>
-
-                            <div class="btn-group p_two">
-                            <button id="categoryModal" data-toggle="modal" data-target="#Categories" type="button" class="btn btn-default waves-effect waves-light">
-                                    <span class="btn-label"><i class="glyphicon glyphicon-th"></i> </span>  Categories   
-                            </button>
-                            <button id="newCategoryModal" data-toggle="modal" data-target="#newCategory" type="button" class="btn btn-warning waves-effect waves-light">
-                                <i class="fa fa-plus"></i> 
-                            </button>
-                            </div>
+                             <div class="button-list pull-left m-t-15 m-l-10">
                    
-                            <button id="viewRefOrders" data-toggle="modal" data-target="#holdOrdersModal" type="button" class="btn btn-info waves-effect waves-light">
-                                    <span class="btn-label"><i class="fa fa-shopping-basket"></i> </span> Open Tabs
+                            <button id="viewRefOrders" data-toggle="modal" data-target="#holdOrdersModal" type="button" class="btn btn-info waves-effect waves-light hide-on-trans">
+                                    <span class="btn-label"><i class="fa fa-shopping-basket"></i> </span> <span data-i18n="nav.openTabs">Open Tabs</span>
                             </button>
             
-                            <button id="viewCustomerOrders" data-toggle="modal" data-target="#customerModal" type="button" onclick="$(this).getCustomerOrders()" class="btn btn-info waves-effect waves-light">
-                                    <span class="btn-label"><i class="fa fa-user"></i> </span> Customer Orders
+                            <button id="viewCustomerOrders" data-toggle="modal" data-target="#customerModal" type="button" onclick="$(this).getCustomerOrders()" class="btn btn-info waves-effect waves-light hide-on-trans">
+                                    <span class="btn-label"><i class="fa fa-user"></i> </span> <span data-i18n="nav.customerOrders">Customer Orders</span>
                             </button>
                         
                     </div>
@@ -60,26 +59,13 @@
 
                     <div class="button-list pull-right m-t-15 m-l-10">  
 
-                            <button id="settings" data-toggle="modal" data-target="#settingsModal"  type="button"  class="btn btn-default waves-effect waves-light p_five">
-                                <i class="glyphicon glyphicon-cog"></i>
-                          </button>
-
                             <button id="transactions" type="button" class="btn btn-default waves-effect waves-light p_three">
-                            <span class="btn-label"><i class=" 	glyphicon glyphicon-credit-card"></i> </span>  Transactions 
+                            <span class="btn-label"><i class=" 	glyphicon glyphicon-credit-card"></i> </span>  <span data-i18n="nav.transactions">Transactions</span> 
                             </button>
 
                             <button id="pointofsale" type="button" class="btn btn-default waves-effect waves-light">
-                                <span class="btn-label"><i class=" 	glyphicon glyphicon-shopping-cart"></i> </span>  Point of Sale
+                                <span class="btn-label"><i class=" 	glyphicon glyphicon-shopping-cart"></i> </span>  <span data-i18n="nav.pointOfSale">Point of Sale</span>
                             </button>
-
-                            <div class="btn-group p_four">
-                                <button id="usersModal" data-toggle="modal" data-target="#Users" type="button" class="btn btn-default waves-effect waves-light">
-                                        <span class="btn-label"><i class=" 	glyphicon glyphicon-user"></i> </span>  Users  
-                                </button>
-                                <button id="add-user" data-toggle="modal"   type="button" class="btn btn-dark waves-effect waves-light">
-                                        <i class="fa fa-plus"></i> 
-                                </button>
-                             </div>
 
 
                             <button type="button"  class="btn btn-light waves-effect waves-light" id="cashier">
@@ -94,6 +80,11 @@
                             <button id="quit"  type="button" class="btn btn-danger waves-effect waves-light">
                                     <i class="glyphicon glyphicon-off"></i>
                             </button>
+                            
+                            <select id="language_selector" class="form-control" style="display: inline-block; width: auto; margin-left: 10px; height: 38px;">
+                                <option value="en">English</option>
+                                <option value="fr">Français</option>
+                            </select>
                         
                     </div>
         
@@ -101,31 +92,229 @@
             </div>
             <br>
 
-    <div id="transactions_view">
+    <!-- Transactions Sidebar -->
+    <div id="transactions_sidebar" style="display:none; position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%); z-index: 999; box-shadow: 2px 0 10px rgba(0,0,0,0.3); overflow-y: auto;">
+        <div style="padding: 20px; color: white;">
+            <h4 style="color: #ecf0f1; margin-bottom: 30px; text-align: center; font-weight: bold;">
+                <i class="glyphicon glyphicon-th-list"></i> <span data-i18n="nav.transactions">Transactions</span>
+            </h4>
+            
+            <div class="sidebar-menu">
+                <button id="sidebar-dashboard" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-dashboard"></i> <span data-i18n="nav.dashboard" style="margin-left: 10px;">Dashboard</span>
+                </button>
+                
+                <button id="sidebar-transactions" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-credit-card"></i> <span data-i18n="nav.transactions" style="margin-left: 10px;">Transactions</span>
+                </button>
+                
+                <button id="sidebar-inventory" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-list-alt"></i> <span data-i18n="nav.inventory" style="margin-left: 10px;">Inventory</span>
+                </button>
+                
+                <button id="sidebar-products" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-barcode"></i> <span data-i18n="nav.products" style="margin-left: 10px;">Products</span>
+                </button>
+                
+                <button id="sidebar-categories" data-toggle="modal" data-target="#Categories" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-th"></i> <span data-i18n="nav.categories" style="margin-left: 10px;">Categories</span>
+                </button>
+                
+                <button id="sidebar-users" data-toggle="modal" data-target="#Users" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-user"></i> <span data-i18n="nav.users" style="margin-left: 10px;">Users</span>
+                </button>
+                
+                <button id="sidebar-settings" data-toggle="modal" data-target="#settingsModal" class="btn btn-default btn-block waves-effect waves-light" style="margin-bottom: 10px; text-align: left; background: rgba(255,255,255,0.1); border: none; color: white; padding: 15px; transition: all 0.3s;">
+                    <i class="glyphicon glyphicon-cog"></i> <span data-i18n="nav.settings" style="margin-left: 10px;">Settings</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Management Page -->
+    <div id="products_page" style="display:none; transition: margin-left 0.3s ease;">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card-box">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h3 data-i18n="nav.products">Products</h3>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <!-- View Toggle Buttons -->
+                            <div class="btn-group" role="group">
+                                <button type="button" id="viewCards" class="btn btn-info waves-effect" style="padding: 10px 25px;">
+                                    <i class="fa fa-th-large"></i> <span data-i18n="view.cards">Cards</span>
+                                </button>
+                                <button type="button" id="viewTable" class="btn btn-default waves-effect" style="padding: 10px 25px;">
+                                    <i class="fa fa-table"></i> <span data-i18n="view.table">Table</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-right">
+                            <button id="addNewProduct" class="btn btn-success waves-effect waves-light" style="padding: 10px 25px;">
+                                <i class="fa fa-plus"></i> <span data-i18n="btn.add">Add</span>
+                            </button>
+                        </div>
+                    </div>
+                    <hr>
+                    
+                    <!-- Search Bar -->
+                    <div class="row" style="margin-bottom: 15px;">
+                        <div class="col-md-4 col-md-offset-4">
+                            <div class="input-group">
+                                <span class="input-group-addon" style="background: #5fbeaa; border-color: #5fbeaa; padding: 8px 12px;">
+                                    <i class="fa fa-search" style="color: white;"></i>
+                                </span>
+                                <input type="text" id="products_search" class="form-control" 
+                                       style="height: 38px; font-size: 14px; border-left: none; border-right: none;" 
+                                       data-i18n-placeholder="product.search" 
+                                       placeholder="Search by name or barcode...">
+                                <span class="input-group-addon" id="clear_search" style="cursor: pointer; background: #f05050; border-color: #f05050; padding: 8px 12px; display: none;">
+                                    <i class="fa fa-times" style="color: white;"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cards View -->
+                    <div id="products_cards_view" style="display:none;">
+                        <div class="row" id="products_cards_container">
+                            <!-- Product cards will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Table View -->
+                    <div id="products_table_view" style="display:none;">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <table class="table table-striped table-bordered" id="productsManagementTable">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="common.barcode">Barcode</th>
+                                            <th>Image</th>
+                                            <th data-i18n="common.name">Name</th>
+                                            <th data-i18n="cart.price">Price</th>
+                                            <th data-i18n="product.category">Category</th>
+                                            <th data-i18n="common.action">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="products_management_list">
+                                        <!-- Products will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Stock Management Page -->
+    <div id="inventory_page" style="display:none; transition: margin-left 0.3s ease;">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card-box">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h3><i class="fa fa-cubes"></i> <span data-i18n="nav.inventory">Inventory</span></h3>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <!-- Tabs -->
+                            <div class="btn-group" role="group">
+                                <button type="button" id="viewStockTab" class="btn btn-info waves-effect" style="padding: 10px 25px;">
+                                    <i class="fa fa-cubes"></i> <span data-i18n="inventory.stock">Stock</span>
+                                </button>
+                                <button type="button" id="viewHistoryTab" class="btn btn-default waves-effect" style="padding: 10px 25px;">
+                                    <i class="fa fa-history"></i> <span data-i18n="inventory.purchaseHistory">History</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-right">
+                            <button id="addNewPurchase" class="btn btn-success waves-effect waves-light" style="padding: 10px 25px;">
+                                <i class="fa fa-plus"></i> <span data-i18n="inventory.addPurchase">Add Purchase</span>
+                            </button>
+                        </div>
+                    </div>
+                    <hr>
+                    
+                    <!-- Stock View -->
+                    <div id="stock_view" class="row">
+                        <div class="col-md-12">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="inventoryStockTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Image</th>
+                                            <th data-i18n="product.name">Product Name</th>
+                                            <th data-i18n="common.barcode">Barcode</th>
+                                            <th data-i18n="product.category">Category</th>
+                                            <th data-i18n="product.stock">Stock</th>
+                                            <th data-i18n="cart.price">Selling Price</th>
+                                            <th data-i18n="common.action">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inventory_stock_list">
+                                        <!-- Stock items will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- History View -->
+                    <div id="history_view" class="row" style="display:none;">
+                        <div class="col-md-12">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="purchasesHistoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="inventory.date">Date</th>
+                                            <th data-i18n="inventory.supplier">Supplier</th>
+                                            <th data-i18n="inventory.items">Items</th>
+                                            <th data-i18n="inventory.totalAmount">Total Amount</th>
+                                            <th data-i18n="inventory.notes">Notes</th>
+                                            <th data-i18n="common.action">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="purchases_history_list">
+                                        <!-- Purchases will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="transactions_view" style="transition: margin-left 0.3s ease;">
         <div class="row">
             <div class="col-md-12">
                 <div class="card-box"> 
                     <div class="row">               
-                        <h3 class="col-md-2">Transactions</h3> 
+                        <h3 class="col-md-2" data-i18n="nav.transactions">Transactions</h3> 
                         <div class="col-md-1">
-                            <span>Till</span>
+                            <span data-i18n="trans.till">Till</span>
                             <select id="tills" class="form-control">                              
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <span>Cashier</span>
+                            <span data-i18n="trans.cashier">Cashier</span>
                             <select id="users" class="form-control">
                             </select>
                         </div>
                         <div class="col-md-1">
-                            <span>Status</span>
+                            <span data-i18n="trans.status">Status</span>
                             <select id="status" class="form-control status">
-                                <option value="1">Paid</option>
-                                <option value="0">Unpaid</option>
+                                <option value="1" data-i18n="trans.paid">Paid</option>
+                                <option value="0" data-i18n="trans.unpaid">Unpaid</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <span style="width: 100%;">Date</span>
+                            <span style="width: 100%;" data-i18n="trans.date">Date</span>
                             <div id="reportrange">
                                 <i class="fa fa-calendar"></i>&nbsp;
                                 <span></span> <i class="fa fa-caret-down"></i>
@@ -139,41 +328,41 @@
                             <div class="col-md-5">
                                 <div class="row">
                                     <div class="col-md-8" id="productSales">
-                                            <h4>Products</h4>
+                                            <h4 data-i18n="nav.products">Products</h4>
                                             <hr>
                                             <table class="table tablesaw-enhanced" id="productsSold">
                                                 <thead>
                                                     <tr>
-                                                        <th>Name</th>
-                                                        <th>Sold</th>
-                                                        <th>Available</th> 
-                                                        <th>Sales</th>                                                                                                           
+                                                        <th data-i18n="common.name">Name</th>
+                                                        <th data-i18n="trans.sold">Sold</th>
+                                                        <th data-i18n="trans.available">Available</th> 
+                                                        <th data-i18n="trans.sales">Sales</th>                                                                                                           
                                                     </tr>
                                                 </thead>
                                                 <tbody id="product_sales"></tbody>
                                             </table>
                                     </div>
                                     <div class="col-md-4" id="totals">
-                                            <h4>Total</h4>
+                                            <h4 data-i18n="cart.total">Total</h4>
                                             <hr>
                                     
                                             <div id="total_sales" class="btn-success">
-                                                <h5>SALES</h5>
+                                                <h5 data-i18n="trans.sales">SALES</h5>
                                                 <div id="counter">0</div>
                                             </div>
                                        
                                             <div id="total_transactions" class="btn-warning">
-                                                <h5>TRANSACTIONS</h5>
+                                                <h5 data-i18n="nav.transactions">TRANSACTIONS</h5>
                                                 <div id="counter">0</div>
                                             </div>
                                 
                                             <div id="total_items" class="btn-info">
-                                                <h5>ITEMS</h5>
+                                                <h5 data-i18n="trans.items">ITEMS</h5>
                                                 <div id="counter">0</div>
                                             </div>
 
                                             <div id="total_products" class="btn-default">
-                                                <h5>PRODUCTS</h5>
+                                                <h5 data-i18n="trans.products">PRODUCTS</h5>
                                                 <div id="counter">0</div>
                                             </div>
                                                                          
@@ -186,15 +375,15 @@
                             <table class="table tablesaw-enhanced" id="transactionList">
                                 <thead>
                                     <tr>                                                                      
-                                        <th>Invoice</th>                                      
-                                        <th>Date</th>
-                                        <th>Total</th>
-                                        <th>Paid</th>
-                                        <th>Change</th>
-                                        <th>Method</th>
-                                        <th>Till</th>
-                                        <th>Cashier</th>
-                                        <th>View</th>
+                                        <th data-i18n="trans.invoice">Invoice</th>                                      
+                                        <th data-i18n="trans.date">Date</th>
+                                        <th data-i18n="trans.total">Total</th>
+                                        <th data-i18n="trans.paid">Paid</th>
+                                        <th data-i18n="trans.change">Change</th>
+                                        <th data-i18n="trans.method">Method</th>
+                                        <th data-i18n="trans.till">Till</th>
+                                        <th data-i18n="trans.cashier">Cashier</th>
+                                        <th data-i18n="common.view">View</th>
                                     </tr>
                                 </thead>
                                 <tbody id="transaction_list"></tbody>
@@ -224,7 +413,7 @@
                       </div>
                       <div class="input-group m-t-5">
                           <form action="" id="searchBarCode">
-                              <input type="text" required id="skuCode" name="skuCode" class="form-control" placeholder="Scan barcode or type the number then hit enter" aria-label="Recipient's username" aria-describedby="basic-addon2">
+                              <input type="text" required id="skuCode" name="skuCode" class="form-control" data-i18n-placeholder="product.scanBarcode" placeholder="Scan barcode or type the number then hit enter" aria-label="Recipient's username" aria-describedby="basic-addon2">
                               <input type="submit" style="display:none;">
                           </form>
                           <span class="input-group-addon" id="basic-addon2">
@@ -238,9 +427,9 @@
                           <thead>
                           <tr>
                               <th>#</th>
-                              <th width="150px">Item</th>
-                              <th width="170px">Qty</th>
-                              <th>Price</th>
+                              <th width="150px" data-i18n="cart.item">Item</th>
+                              <th width="170px" data-i18n="cart.quantity">Qty</th>
+                              <th data-i18n="cart.price">Price</th>
                               <th width="5px">
                                   <button onclick="$(this).cancelOrder()" class="btn btn-danger btn-xs"><i class="fa fa-times"></i></button>
                               </th>
@@ -257,15 +446,15 @@
                   <hr>
                  <div class="m-t-5">
                      <div class="row">
-                         <div class="col-md-3">Total Item(s)</div>
+                         <div class="col-md-3" data-i18n="cart.totalItems">Total Item(s)</div>
                          <div class="col-md-3">: <sapn id="total">0</sapn></div>
-                         <div class="col-md-3">Price :</div>
+                         <div class="col-md-3"><span data-i18n="cart.price">Price</span> :</div>
                          <div class="col-md-3">: <span id="price">0.0</span></div>
                      </div>
                      <div class="row">
-                         <div class="col-md-3">Discount</div>
+                         <div class="col-md-3" data-i18n="cart.discount">Discount</div>
                          <div class="col-md-3"><input class="form-control" type="number" id="inputDiscount" oninput="$(this).calculateCart();"></div>
-                         <div class="col-md-3">Gross Price (inc <span id="taxInfo"></span>% Tax)</div>
+                         <div class="col-md-3"><span data-i18n="cart.grossPrice">Gross Price (inc</span> <span id="taxInfo"></span>% <span data-i18n="cart.tax">Tax)</span></div>
                          <div class="col-md-3"><h3 id="gross_price">0.00</h3></div>
                      </div>
   
@@ -278,15 +467,15 @@
                     </button>
 
                       <button  onclick="$(this).cancelOrder()" type="button" class="btn btn-danger waves-effect waves-light">
-                          <span class="btn-label"><i class="fa fa-ban"></i></span>Cancel
+                          <span class="btn-label"><i class="fa fa-ban"></i></span><span data-i18n="btn.cancel">Cancel</span>
                       </button>
   
                       <button type="button" id="hold" class="btn btn-default waves-effect waves-light">
-                          <span class="btn-label"><i class="fa fa-hand-paper-o"></i></span>Hold
+                          <span class="btn-label"><i class="fa fa-hand-paper-o"></i></span><span data-i18n="btn.hold">Hold</span>
                       </button>
   
                       <button type="button" id="payButton" class="btn btn-success waves-effect waves-light">
-                          <span class="btn-label"><i class="fa fa-money"></i></span>Pay
+                          <span class="btn-label"><i class="fa fa-money"></i></span><span data-i18n="btn.pay">Pay</span>
                       </button>
                   </div>
                   <hr>
@@ -297,7 +486,7 @@
               <div class="card-box">
                   <div class="row">
                       <div class="col-md-4">
-                          <input type="text" id="search" class="form-control" placeholder="Search product by name or sku">
+                          <input type="text" id="search" class="form-control" data-i18n-placeholder="product.searchByName" placeholder="Search product by name or sku">
                       </div>
                       <div class="col-md-8">
                           <div class="" id="categories">
@@ -537,7 +726,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
-                    <h4 class="modal-title" id="mySmallModalLabel">Product
+                    <h4 class="modal-title" id="mySmallModalLabel"><span data-i18n="nav.products">Product</span>
                         <img  class="loading m-t-5" style="margin-left: 35%" height="50px" src="assets/images/loading.gif" alt="">
                     </h4>
                 </div>
@@ -547,31 +736,31 @@
                         <input type="hidden" name="img" id="img">
                         <input type="hidden" name="remove" id="remove_img">
                         <div class="form-group">
-                            <label for="userName">Category</label>
+                            <label for="userName" data-i18n="product.category">Category</label>
                             <select name="category" class="form-control" id="category"></select>
                         </div>
                         <div class="form-group">
-                            <label for="userName">Product Name</label>
-                            <input type="text" required="required"  name="name" parsley-trigger="change" placeholder="Enter a product name" class="form-control" id="productName">
+                            <label for="userName" data-i18n="product.name">Product Name</label>
+                            <input type="text" required="required"  name="name" parsley-trigger="change" data-i18n-placeholder="common.enterProductName" placeholder="Enter a product name" class="form-control" id="productName">
                         </div>
                         <div class="form-group">
-                            <label for="userName">Price</label>
-                            <input type="text" required="required" name="price" placeholder="Price" class="form-control" id="product_price">
+                            <label for="userName" data-i18n="cart.price">Price</label>
+                            <input type="text" required="required" name="price" data-i18n-placeholder="cart.price" placeholder="Price" class="form-control" id="product_price">
                         </div>
                         <div class="form-group">
-                            <label for="userName">Stock</label>
-                            <input type="text" name="quantity" placeholder="Available stock" class="form-control" id="quantity">
+                            <label for="userName" data-i18n="product.stock">Stock</label>
+                            <input type="text" name="quantity" data-i18n-placeholder="common.availableStock" placeholder="Available stock" class="form-control" id="quantity">
                         </div>
                         <div class="form-group">
-                            <label><input type="checkbox" name="stock" id="stock" style="max-width: 30px; float: left;">  Disable stock check </label>
+                            <label><input type="checkbox" name="stock" id="stock" style="max-width: 30px; float: left;">  <span data-i18n="common.disableStockCheck">Disable stock check</span> </label>
                         </div>
                         <div class="form-group">
-                            <label for="userName"><span id="rmv_img" class="btn btn-xs btn-warning">Remove</span> Picture </label>                      
+                            <label for="userName"><span id="rmv_img" class="btn btn-xs btn-warning" data-i18n="common.remove">Remove</span> <span data-i18n="common.picture">Picture</span> </label>                      
                             <div id="current_img"></div>
                             <input type="file" name="imagename" id="imagename">                            
                         </div>
   
-                        <input type="submit" id="submitProduct" class="btn btn-primary btn-block waves-effect waves-light">
+                        <input type="submit" id="submitProduct" class="btn btn-primary btn-block waves-effect waves-light" data-i18n="common.submit" value="Submit">
                     </form>
                 </div>
             </div>
@@ -579,24 +768,296 @@
     </div>
 
 
+    <!-- Product Management Modal (Without Stock) -->
+    <!-- Product Management Modal - Large & Touch-Friendly -->
+    <div id="productManagementModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" style="display: none;">
+        <div class="modal-dialog modal-lg" style="width: 90%; max-width: 900px; margin: 20px auto;">
+            <div class="modal-content" style="max-height: 90vh; display: flex; flex-direction: column;">
+                <div class="modal-header" style="background: #5fbeaa; color: white; padding: 15px 20px; flex-shrink: 0;">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true" style="color: white; opacity: 1; font-size: 28px; margin-top: -5px;">×</button>
+                    <h3 class="modal-title" id="productModalTitle" style="font-size: 20px; font-weight: bold; margin: 0;">
+                        <i class="fa fa-barcode"></i> <span data-i18n="nav.products">Product</span>
+                    </h3>
+                    <img class="loading m-t-5" style="display:none;" height="40px" src="assets/images/loading.gif" alt="">
+                </div>
+                <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
+                    <form id="productManagementForm" encType="multipart/form-data">
+                        <input type="hidden" name="id" id="pm_product_id">
+                        <input type="hidden" name="img" id="pm_img">
+                        <input type="hidden" name="remove" id="pm_remove_img">
+                        
+                        <div class="row">
+                            <!-- Left Column -->
+                            <div class="col-md-6">
+                                <div class="form-group" style="margin-bottom: 20px;">
+                                    <label for="pm_barcode" style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">
+                                        <i class="fa fa-barcode"></i> <span data-i18n="common.barcode">Barcode</span>
+                                    </label>
+                                    <input type="text" name="barcode" class="form-control" id="pm_barcode" 
+                                           style="height: 45px; font-size: 15px; padding: 10px;" 
+                                           data-i18n-placeholder="common.barcode" placeholder="Barcode (optional)">
+                                </div>
+                                
+                                <div class="form-group" style="margin-bottom: 20px;">
+                                    <label for="pm_category" style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">
+                                        <i class="fa fa-tag"></i> <span data-i18n="product.category">Category</span>
+                                    </label>
+                                    <select name="category" class="form-control" id="pm_category" 
+                                            style="height: 45px; font-size: 15px; padding: 10px;"></select>
+                                </div>
+                                
+                                <div class="form-group" style="margin-bottom: 20px;">
+                                    <label for="pm_productName" style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">
+                                        <i class="fa fa-cube"></i> <span data-i18n="product.name">Product Name</span> *
+                                    </label>
+                                    <input type="text" required="required" name="name" class="form-control" id="pm_productName" 
+                                           style="height: 45px; font-size: 15px; padding: 10px;" 
+                                           data-i18n-placeholder="common.enterProductName" placeholder="Enter a product name">
+                                </div>
+                                
+                                <div class="form-group" style="margin-bottom: 20px;">
+                                    <label for="pm_product_price" style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">
+                                        <i class="fa fa-money"></i> <span data-i18n="cart.price">Price</span> *
+                                    </label>
+                                    <input type="number" step="0.01" required="required" name="price" class="form-control" id="pm_product_price" 
+                                           style="height: 45px; font-size: 15px; padding: 10px;" 
+                                           data-i18n-placeholder="cart.price" placeholder="Price">
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column - Image -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">
+                                        <i class="fa fa-image"></i> <span data-i18n="common.picture">Picture</span>
+                                    </label>
+                                    
+                                    <div id="pm_current_img" style="margin-bottom: 10px; text-align: center; height: 180px; max-height: 180px; background: #f5f5f5; border: 2px dashed #ddd; border-radius: 8px; padding: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                        <p style="color: #999; margin: 0;">No image selected</p>
+                                    </div>
+                                    
+                                    <div style="text-align: center; margin-top: 10px;">
+                                        <button type="button" id="pm_rmv_img" class="btn btn-warning waves-effect" 
+                                                style="display: none; padding: 10px 20px; font-size: 14px; margin-bottom: 10px;">
+                                            <i class="fa fa-times"></i> <span data-i18n="common.remove">Remove</span>
+                                        </button>
+                                        
+                                        <label for="pm_imagename" class="btn btn-info btn-block waves-effect" 
+                                               style="padding: 12px; font-size: 15px; cursor: pointer; margin: 0;">
+                                            <i class="fa fa-upload"></i> <span data-i18n="common.choose">Choose Image</span>
+                                        </label>
+                                        <input type="file" name="imagename" id="pm_imagename" accept="image/*" 
+                                               style="display: none;">
+                                        
+                                        <small class="text-muted" style="display: block; margin-top: 8px; font-size: 12px;">
+                                            Recommended: 500x500px, JPG/PNG
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr style="margin: 20px 0;">
+                        
+                        <div class="row">
+                            <div class="col-md-8 col-md-offset-2">
+                                <button type="submit" id="pm_submitProduct" class="btn btn-success btn-lg btn-block waves-effect waves-light" 
+                                        style="padding: 12px; font-size: 16px; font-weight: bold;">
+                                    <i class="fa fa-check"></i> <span data-i18n="common.submit">Submit</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Purchase Modal -->
+    <div id="addPurchaseModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" style="display: none;">
+        <div class="modal-dialog modal-lg" style="width: 95%; max-width: 1000px; margin: 20px auto;">
+            <div class="modal-content" style="max-height: 90vh; display: flex; flex-direction: column;">
+                <div class="modal-header" style="background: #5fbeaa; color: white; padding: 15px 20px; flex-shrink: 0;">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true" style="color: white; opacity: 1; font-size: 28px; margin-top: -5px;">×</button>
+                    <h3 class="modal-title" style="font-size: 20px; font-weight: bold; margin: 0;">
+                        <i class="fa fa-truck"></i> <span data-i18n="inventory.addPurchase">Add Purchase</span>
+                    </h3>
+                    <img class="loading m-t-5" style="display:none;" height="40px" src="assets/images/loading.gif" alt="">
+                </div>
+                <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
+                    <form id="addPurchaseForm">
+                        <!-- Supplier Info -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="purchase_supplier" style="font-size: 15px; font-weight: 600;">
+                                        <i class="fa fa-user"></i> <span data-i18n="inventory.supplier">Supplier</span> *
+                                    </label>
+                                    <input type="text" required="required" class="form-control" id="purchase_supplier" 
+                                           style="height: 45px; font-size: 15px;" 
+                                           data-i18n-placeholder="inventory.supplierName" placeholder="Supplier Name">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="purchase_notes" style="font-size: 15px; font-weight: 600;">
+                                        <i class="fa fa-sticky-note"></i> <span data-i18n="inventory.notes">Notes</span>
+                                    </label>
+                                    <input type="text" class="form-control" id="purchase_notes" 
+                                           style="height: 45px; font-size: 15px;" 
+                                           data-i18n-placeholder="inventory.notesPlaceholder" placeholder="Optional notes">
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Products Section -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h4 style="margin-bottom: 15px;">
+                                    <i class="fa fa-shopping-cart"></i> <span data-i18n="inventory.purchasedItems">Purchased Items</span>
+                                </h4>
+                                <button type="button" id="addPurchaseItem" class="btn btn-info waves-effect" style="margin-bottom: 15px;">
+                                    <i class="fa fa-plus"></i> <span data-i18n="inventory.addItem">Add Item</span>
+                                </button>
+
+                                <!-- Items Container -->
+                                <div id="purchase_items_container">
+                                    <!-- Purchase items will be added here dynamically -->
+                                </div>
+
+                                <!-- Total Amount -->
+                                <div class="row" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 6px;">
+                                    <div class="col-md-6 col-md-offset-6">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <h4 style="margin: 0; font-weight: bold;">
+                                                <span data-i18n="inventory.totalAmount">Total Amount</span>:
+                                            </h4>
+                                            <h3 id="purchase_total_amount" style="margin: 0; color: #10c469; font-weight: bold;">
+                                                0 DH
+                                            </h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+                            <div class="col-md-6 col-md-offset-3">
+                                <button type="submit" class="btn btn-success btn-lg btn-block waves-effect waves-light" 
+                                        style="padding: 12px; font-size: 16px; font-weight: bold;">
+                                    <i class="fa fa-check"></i> <span data-i18n="inventory.savePurchase">Save Purchase</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Stock Modal -->
+    <div id="editStockModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" style="display: none;">
+        <div class="modal-dialog modal-md">
+            <div class="modal-content">
+                <div class="modal-header" style="background: #5fbeaa; color: white;">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true" style="color: white;">×</button>
+                    <h4 class="modal-title">
+                        <i class="fa fa-edit"></i> <span data-i18n="inventory.editStock">Edit Stock</span>
+                    </h4>
+                </div>
+                <div class="modal-body">
+                    <form id="editStockForm">
+                        <input type="hidden" id="edit_stock_product_id">
+                        <div class="form-group">
+                            <label><strong data-i18n="product.name">Product</strong></label>
+                            <p id="edit_stock_product_name" style="font-size: 16px;"></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_stock_current"><span data-i18n="inventory.currentStock">Current Stock</span></label>
+                            <input type="number" class="form-control" id="edit_stock_current" readonly style="background: #f5f5f5;">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_stock_new"><span data-i18n="inventory.newStock">New Stock</span> *</label>
+                            <input type="number" class="form-control" id="edit_stock_new" required min="0" style="font-size: 18px; height: 50px;">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_stock_reason"><span data-i18n="inventory.reason">Reason</span></label>
+                            <textarea class="form-control" id="edit_stock_reason" rows="3" data-i18n-placeholder="inventory.reasonPlaceholder" placeholder="Reason for adjustment (optional)"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-block" style="padding: 12px; font-size: 16px;">
+                            <i class="fa fa-check"></i> <span data-i18n="inventory.updateStock">Update Stock</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Purchase Details Modal -->
+    <div id="purchaseDetailsModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" style="display: none;">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: #5fbeaa; color: white;">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true" style="color: white;">×</button>
+                    <h4 class="modal-title">
+                        <i class="fa fa-info-circle"></i> <span data-i18n="inventory.purchaseDetails">Purchase Details</span>
+                    </h4>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong data-i18n="inventory.date">Date:</strong> <span id="detail_date"></span></p>
+                            <p><strong data-i18n="inventory.supplier">Supplier:</strong> <span id="detail_supplier"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong data-i18n="inventory.totalAmount">Total Amount:</strong> <span id="detail_total" style="color: #10c469; font-size: 18px; font-weight: bold;"></span></p>
+                            <p><strong data-i18n="inventory.notes">Notes:</strong> <span id="detail_notes"></span></p>
+                        </div>
+                    </div>
+                    <hr>
+                    <h5><strong data-i18n="inventory.purchasedItems">Purchased Items:</strong></h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="product.name">Product</th>
+                                    <th data-i18n="cart.quantity">Quantity</th>
+                                    <th data-i18n="inventory.buyingPrice">Buying Price</th>
+                                    <th data-i18n="cart.total">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail_items">
+                                <!-- Items will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="newCategory" class="modal fade bs-example-modal-sm" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel" aria-hidden="true" style="display: none;">
             <div class="modal-dialog modal-md">
                 <div class="modal-content">
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
-                        <h4 class="modal-title" id="mySmallModalLabel">Category
+                        <h4 class="modal-title" id="mySmallModalLabel"><span data-i18n="product.category">Category</span>
                             <img  class="loading m-t-5" style="margin-left: 35%" height="50px" src="assets/images/loading.gif" alt="">
                         </h4>
                     </div>
                     <div class="modal-body">
                         <form id="saveCategory">
                             <div class="form-group">
-                                <label for="userName">Name</label>
+                                <label for="userName" data-i18n="common.name">Name</label>
                                 <input id="category_id" type="hidden" name="id">
-                                <input id="categoryName" type="text" required="required"  name="name" placeholder="Enter a category name" class="form-control" >
+                                <input id="categoryName" type="text" required="required"  name="name" data-i18n-placeholder="common.enterCategoryName" placeholder="Enter a category name" class="form-control" >
                             </div>
                           
-                            <input type="submit" id="submitCategory" class="btn btn-primary btn-block waves-effect waves-light">
+                            <input type="submit" id="submitCategory" class="btn btn-primary btn-block waves-effect waves-light" data-i18n="common.submit" value="Submit">
                         </form>
                     </div>
                </div>
@@ -610,22 +1071,22 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
-                        <h4 class="modal-title" id="mySmallModalLabel">Products
+                        <h4 class="modal-title" id="mySmallModalLabel"><span data-i18n="nav.products">Products</span>
                             <img  class="loading m-t-5" style="margin-left: 35%" height="50px" src="assets/images/loading.gif" alt="">
-                            <button class="btn btn-white pull-right" id="print_list">Download</button>
+                            <button class="btn btn-white pull-right" id="print_list" data-i18n="common.download">Download</button>
                         </h4>                        
                     </div>
                      <div class="modal-body" id="all_products" style="padding: 20px; padding-right: 40px;"> 
                         <table class="table table-bordered" id="productList">
                             <thead>
                                 <tr>                                                                      
-                                    <th>Barcode</th>
-                                    <th>Item</th>
-                                    <th>Name</th>                                      
-                                    <th>Price</th>
-                                    <th>Stock</th>
-                                    <th>Category</th>
-                                    <th>Action</th>
+                                    <th data-i18n="common.barcode">Barcode</th>
+                                    <th data-i18n="cart.item">Item</th>
+                                    <th data-i18n="common.name">Name</th>                                      
+                                    <th data-i18n="cart.price">Price</th>
+                                    <th data-i18n="product.stock">Stock</th>
+                                    <th data-i18n="product.category">Category</th>
+                                    <th data-i18n="common.action">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="product_list"></tbody>

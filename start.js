@@ -43,8 +43,8 @@ function createWindow() {
     `file://${path.join(__dirname, 'index.html')}`
   )
 
-  // DevTools enabled for debugging
-  mainWindow.webContents.openDevTools();
+  // DevTools disabled for production
+  // mainWindow.webContents.openDevTools();
 
   mainWindow.on('closed', () => {
     mainWindow = null
