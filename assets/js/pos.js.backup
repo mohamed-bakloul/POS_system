@@ -253,6 +253,11 @@ if (auth == undefined) {
         console.log('Loading customers...');
         loadCustomers();
         
+        // Update POS current date
+        updatePOSDate();
+        // Update date every minute
+        setInterval(updatePOSDate, 60000);
+        
         // Ensure loading is hidden after a short delay
         setTimeout(function() {
             $(".loading").hide();
@@ -306,42 +311,66 @@ if (auth == undefined) {
         if (0 == user.perm_settings) { $(".p_five").hide() };
 
         function loadProducts() {
-
+            console.log('Loading products from:', api + 'inventory/products');
+            
             $.get(api + 'inventory/products', function (data) {
+                console.log('Products loaded:', data ? data.length : 0, 'items');
+                
+                if (!data || !Array.isArray(data)) {
+                    console.error('Invalid products data:', data);
+                    return;
+                }
 
                 data.forEach(item => {
                     item.price = parseFloat(item.price).toFixed(2);
                 });
 
                 allProducts = [...data];
+                console.log('All products stored:', allProducts.length);
 
                 loadProductList();
 
-                $('#parent').text('');
+                const parentElement = $('#parent');
+                if (!parentElement.length) {
+                    console.error('❌ Parent element not found: #parent');
+                    return;
+                }
+                
+                parentElement.text('');
                 $('#categories').html(`<button type="button" id="all" class="btn btn-categories btn-white waves-effect waves-light">All</button> `);
 
                 data.forEach(item => {
+                    if (!item) return;
 
                     if (!categories.includes(item.category)) {
                         categories.push(item.category);
                     }
 
+                    const itemName = item.name || 'Unknown';
+                    const itemSku = item.sku || '';
+                    const itemStock = item.stock == 1 ? (item.quantity || 0) : 'N/A';
+                    const itemPrice = item.price || '0.00';
+                    const itemImg = item.img == "" ? "./assets/images/default.jpg" : img_path + item.img;
+                    const itemId = item._id || 0;
+                    const itemQuantity = item.quantity || 0;
+
                     let item_info = `<div class="col-lg-2 box ${item.category}"
-                                onclick="$(this).addToCart(${item._id}, ${item.quantity}, ${item.stock})">
+                                onclick="$(this).addToCart(${itemId}, ${itemQuantity}, ${item.stock})">
                             <div class="widget-panel widget-style-2 ">                    
-                            <div id="image"><img src="${item.img == "" ? "./assets/images/default.jpg" : img_path + item.img}" id="product_img" alt=""></div>                    
+                            <div id="image"><img src="${itemImg}" id="product_img" alt="${itemName}"></div>                    
                                         <div class="text-muted m-t-5 text-center">
-                                        <div class="name" id="product_name">${item.name}</div> 
-                                        <span class="sku">${item.sku}</span>
-                                        <span class="stock">STOCK </span><span class="count">${item.stock == 1 ? item.quantity : 'N/A'}</span></div>
-                                        <sp class="text-success text-center"><b data-plugin="counterup">${settings.symbol + item.price}</b> </sp>
+                                        <div class="name" id="product_name">${itemName}</div> 
+                                        <span class="sku">${itemSku}</span>
+                                        <span class="stock">STOCK </span><span class="count">${itemStock}</span></div>
+                                        <sp class="text-success text-center"><b data-plugin="counterup">${settings.symbol + itemPrice}</b> </sp>
                             </div>
                         </div>`;
-                    $('#parent').append(item_info);
+                    parentElement.append(item_info);
                 });
 
-                categories.forEach(category => {
+                console.log('✓ Products rendered:', data.length, 'items');
 
+                categories.forEach(category => {
                     let c = allCategories.filter(function (ctg) {
                         return ctg._id == category;
                     })
@@ -349,6 +378,13 @@ if (auth == undefined) {
                     $('#categories').append(`<button type="button" id="${category}" class="btn btn-categories btn-white waves-effect waves-light">${c.length > 0 ? c[0].name : ''}</button> `);
                 });
 
+            }).fail(function(xhr, status, error) {
+                console.error('Error loading products:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    statusCode: xhr.status
+                });
             });
 
         }
@@ -385,9 +421,14 @@ if (auth == undefined) {
 
 
         $.fn.addToCart = function (id, count, stock) {
-
-            if (stock == 1) {
-                if (count > 0) {
+            // stock: 0 = stock tracking disabled, 1 = stock tracking enabled
+            // count: actual quantity in stock
+            const stockTrackingEnabled = stock == 1;
+            
+            if (stockTrackingEnabled) {
+                // Stock tracking enabled - check if quantity > 0
+                const quantity = parseInt(count) || 0;
+                if (quantity > 0) {
                     $.get(api + 'inventory/product/' + id, function (data) {
                         $(this).addProductToCart(data);
                     });
@@ -401,6 +442,7 @@ if (auth == undefined) {
                 }
             }
             else {
+                // Stock tracking disabled - allow adding regardless of quantity
                 $.get(api + 'inventory/product/' + id, function (data) {
                     $(this).addProductToCart(data);
                 });
@@ -429,35 +471,45 @@ if (auth == undefined) {
                 cache: false,
                 processData: false,
                 success: function (data) {
-
-                    if (data._id != undefined && data.quantity >= 1) {
-                        $(this).addProductToCart(data);
-                        $("#searchBarCode").get(0).reset();
-                        $("#basic-addon2").empty();
-                        $("#basic-addon2").append(
-                            $('<i>', { class: 'glyphicon glyphicon-ok' })
-                        )
-                    }
-                    else if (data.quantity < 1) {
-                        Swal.fire(
-                            'Out of stock!',
-                            'This item is currently unavailable',
-                            'info'
-                        );
-                    }
-                    else {
-
+                    // Check if product exists
+                    if (!data || !data._id) {
                         Swal.fire(
                             'Not Found!',
                             '<b>' + $("#skuCode").val() + '</b> is not a valid barcode!',
                             'warning'
                         );
-
                         $("#searchBarCode").get(0).reset();
                         $("#basic-addon2").empty();
                         $("#basic-addon2").append(
                             $('<i>', { class: 'glyphicon glyphicon-ok' })
-                        )
+                        );
+                        return;
+                    }
+
+                    // Check stock: if stock tracking is disabled (stock == 0), allow adding
+                    // If stock tracking is enabled (stock == 1), check quantity
+                    const stockTrackingEnabled = data.stock == 1;
+                    const quantity = parseInt(data.quantity) || 0;
+                    
+                    if (stockTrackingEnabled && quantity < 1) {
+                        Swal.fire(
+                            'Out of stock!',
+                            'This item is currently unavailable',
+                            'info'
+                        );
+                        $("#searchBarCode").get(0).reset();
+                        $("#basic-addon2").empty();
+                        $("#basic-addon2").append(
+                            $('<i>', { class: 'glyphicon glyphicon-ok' })
+                        );
+                    } else {
+                        // Stock tracking disabled OR quantity >= 1, allow adding to cart
+                        $(this).addProductToCart(data);
+                        $("#searchBarCode").get(0).reset();
+                        $("#basic-addon2").empty();
+                        $("#basic-addon2").append(
+                            $('<i>', { class: 'glyphicon glyphicon-ok' })
+                        );
                     }
 
                 }, error: function (data) {
@@ -633,12 +685,22 @@ if (auth == undefined) {
                 return selected._id == parseInt(item.id);
             });
 
-            if (product[0].stock == 1) {
-                if (item.quantity < product[0].quantity) {
+            // If product not found in allProducts, allow increment (shouldn't happen but be safe)
+            if (!product || product.length === 0) {
+                item.quantity += 1;
+                $(this).renderTable(cart);
+                return;
+            }
+
+            const stockTrackingEnabled = product[0].stock == 1;
+            const availableQuantity = parseInt(product[0].quantity) || 0;
+
+            if (stockTrackingEnabled) {
+                // Stock tracking enabled - check if we can add more
+                if (item.quantity < availableQuantity) {
                     item.quantity += 1;
                     $(this).renderTable(cart);
                 }
-
                 else {
                     Swal.fire(
                         'No more stock!',
@@ -648,6 +710,7 @@ if (auth == undefined) {
                 }
             }
             else {
+                // Stock tracking disabled - allow unlimited quantity
                 item.quantity += 1;
                 $(this).renderTable(cart);
             }
@@ -1247,27 +1310,28 @@ if (auth == undefined) {
         });
 
 
-        $('#transactions').click(function () {
-            loadTransactions();
-            loadUserList();
-
+        // Dashboard button at top (replaces transactions button)
+        $('#dashboard_top').click(function () {
+            // Hide all other views
             $('#pos_view').hide();
             $('#products_page').hide();
             $('#inventory_page').hide();
+            $('#settings_page').hide();
+            $('#categories_page').hide();
+            $('#transactions_view').hide();
             $('#pointofsale').show();
-            $('#transactions_view').show();
             $(this).hide();
             
-            // Show sidebar and adjust layout
+            // Show dashboard page with proper margin for sidebar
+            $('#dashboard_page').show().css('margin-left', '250px');
             $('#transactions_sidebar').fadeIn(300);
-            $('#transactions_view').css('margin-left', '250px');
+            $('.hide-on-pos').show();
             
-            // Hide navbar elements (they're now in sidebar)
-            $('.hide-on-pos').hide();
-            
-            // Hide Open Tabs and Customer Orders buttons on transactions page
+            // Hide Open Tabs and Customer Orders buttons
             $('.hide-on-trans').hide();
-
+            
+            // Load dashboard data
+            loadDashboard();
         });
 
 
@@ -1275,7 +1339,10 @@ if (auth == undefined) {
             $('#pos_view').show();
             $('#products_page').hide();
             $('#inventory_page').hide();
-            $('#transactions').show();
+            $('#settings_page').hide();
+            $('#dashboard_page').hide();
+            $('#categories_page').hide();
+            $('#dashboard_top').show();
             $('#transactions_view').hide();
             $(this).hide();
             
@@ -1686,7 +1753,6 @@ if (auth == undefined) {
             <td><img style="max-height: 50px; max-width: 50px; border: 1px solid #ddd;" src="${product.img == "" ? "./assets/images/default.jpg" : img_path + product.img}" id="product_img"></td>
             <td>${product.name}</td>
             <td>${settings.symbol}${product.price}</td>
-            <td>${product.stock == 1 ? product.quantity : 'N/A'}</td>
             <td>${category.length > 0 ? category[0].name : ''}</td>
             <td class="nobr"><span class="btn-group"><button onClick="$(this).editProduct(${index})" class="btn btn-warning btn-sm"><i class="fa fa-edit"></i></button><button onClick="$(this).deleteProduct(${product._id})" class="btn btn-danger btn-sm"><i class="fa fa-trash"></i></button></span></td></tr>`;
 
@@ -2136,9 +2202,13 @@ function loadTransactions() {
 
 
 
-                trans.items.forEach(item => {
-                    sold_items.push(item);
-                });
+                if (trans.items && Array.isArray(trans.items)) {
+                    trans.items.forEach(item => {
+                        if (item) {
+                            sold_items.push(item);
+                        }
+                    });
+                }
 
 
                 if (!tills.includes(trans.till)) {
@@ -2169,9 +2239,11 @@ function loadTransactions() {
 
                     const result = {};
 
-                    for (const { product_name, price, quantity, id } of sold_items) {
+                    for (const item of sold_items) {
+                        if (!item || !item.product_name) continue;
+                        const { product_name, price, quantity, id } = item;
                         if (!result[product_name]) result[product_name] = [];
-                        result[product_name].push({ id, price, quantity });
+                        result[product_name].push({ id: id || 0, price: price || 0, quantity: quantity || 0 });
                     }
 
                     for (item in result) {
@@ -2264,11 +2336,20 @@ function loadSoldProducts() {
 
         counter++;
 
+        // Safely get stock information
+        let stockDisplay = 'N/A';
+        if (product && product.length > 0 && product[0]) {
+            const productData = product[0];
+            const stockTrackingEnabled = productData.stock == 1;
+            const quantity = parseInt(productData.quantity) || 0;
+            stockDisplay = stockTrackingEnabled ? quantity : 'N/A';
+        }
+
         sold_list += `<tr>
-            <td>${item.product}</td>
-            <td>${item.qty}</td>
-            <td>${product[0].stock == 1 ? product.length > 0 ? product[0].quantity : '' : 'N/A'}</td>
-            <td>${settings.symbol + (item.qty * parseFloat(item.price)).toFixed(2)}</td>
+            <td>${item.product || 'Unknown'}</td>
+            <td>${item.qty || 0}</td>
+            <td>${stockDisplay}</td>
+            <td>${settings.symbol + ((item.qty || 0) * parseFloat(item.price || 0)).toFixed(2)}</td>
             </tr>`;
 
         if (counter == sold.length) {
@@ -2558,6 +2639,10 @@ $('#sidebar-products').off('click').on('click', function(e) {
     $('#pos_view').hide();
     $('#transactions_view').hide();
     $('#products_page').hide();
+    $('#inventory_page').hide();
+    $('#settings_page').hide();
+    $('#dashboard_page').hide();
+    $('#categories_page').hide();
     
     // Show products page
     $('#products_page').show().css('margin-left', '250px');
@@ -2918,8 +3003,13 @@ $('#addNewProduct').click(function() {
     // Load categories
     loadCategoriesForProductModal();
     
-    // Show modal
-    $('#productManagementModal').modal('show');
+    // Show modal with proper aria-hidden handling
+    $('#productManagementModal').on('shown.bs.modal', function() {
+        $(this).attr('aria-hidden', 'false');
+        $(this).find('.close').attr('aria-hidden', 'false');
+    }).on('hidden.bs.modal', function() {
+        $(this).attr('aria-hidden', 'true');
+    }).modal('show');
     
     // Apply translations
     if (window.translateUI) {
@@ -3010,8 +3100,13 @@ $(document).on('click', '.edit-product', function() {
                 console.log('Category set to:', product.category);
             });
             
-            // Show modal
-            $('#productManagementModal').modal('show');
+            // Show modal with proper aria-hidden handling
+            $('#productManagementModal').off('shown.bs.modal hidden.bs.modal').on('shown.bs.modal', function() {
+                $(this).attr('aria-hidden', 'false');
+                $(this).find('.close').attr('aria-hidden', 'false');
+            }).on('hidden.bs.modal', function() {
+                $(this).attr('aria-hidden', 'true');
+            }).modal('show');
             
             // Apply translations
             if (window.translateUI) {
@@ -3043,13 +3138,28 @@ $('#productManagementForm').submit(function(e) {
     e.preventDefault();
     console.log('Submitting product form...');
     
+    // Validate required fields
+    const productName = $('#pm_productName').val().trim();
+    const price = $('#pm_product_price').val();
+    
+    if (!productName) {
+        Swal.fire('Error', 'Product name is required', 'error');
+        return;
+    }
+    
+    if (!price || parseFloat(price) <= 0) {
+        Swal.fire('Error', 'Valid price is required', 'error');
+        return;
+    }
+    
     $('.loading').show();
     
     const formData = new FormData(this);
     
     // Log form data
+    console.log('Form data:');
     for (let pair of formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
+        console.log(pair[0] + ': ' + (pair[1] instanceof File ? '[File: ' + pair[1].name + ']' : pair[1]));
     }
     
     $.ajax({
@@ -3058,9 +3168,20 @@ $('#productManagementForm').submit(function(e) {
         data: formData,
         processData: false,
         contentType: false,
+        timeout: 30000, // 30 second timeout
         success: function(response) {
             console.log('Product saved:', response);
             $('.loading').hide();
+            
+            // Reset form
+            $('#productManagementForm')[0].reset();
+            $('#pm_product_id').val('');
+            $('#pm_img').val('');
+            $('#pm_remove_img').val('');
+            $('#pm_current_img').html('<p style="color: #999; margin: 0;">No image selected</p>');
+            $('#pm_rmv_img').hide();
+            
+            // Hide modal
             $('#productManagementModal').modal('hide');
             
             Swal.fire({
@@ -3074,10 +3195,25 @@ $('#productManagementForm').submit(function(e) {
             // Reload products table
             loadProductsManagement();
         },
-        error: function(error) {
-            console.error('Error saving product:', error);
+        error: function(xhr, status, error) {
+            console.error('Error saving product:', {
+                status: status,
+                error: error,
+                responseText: xhr.responseText,
+                statusCode: xhr.status
+            });
             $('.loading').hide();
-            Swal.fire('Error', 'Failed to save product', 'error');
+            
+            let errorMsg = 'Failed to save product';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMsg = xhr.responseJSON.error;
+            } else if (status === 'timeout') {
+                errorMsg = 'Request timed out. Please try again.';
+            } else if (xhr.status === 0) {
+                errorMsg = 'Cannot connect to server. Please check if the server is running.';
+            }
+            
+            Swal.fire('Error', errorMsg, 'error');
         }
     });
 });
@@ -3140,6 +3276,9 @@ $('#sidebar-inventory').off('click').on('click', function(e) {
     $('#pos_view').hide();
     $('#transactions_view').hide();
     $('#products_page').hide();
+    $('#settings_page').hide();
+    $('#dashboard_page').hide();
+    $('#categories_page').hide();
     
     // Show inventory page with proper margin for sidebar
     $('#inventory_page').show().css('margin-left', '250px');
@@ -3162,11 +3301,17 @@ function loadInventoryStock() {
         dataType: 'json',
         success: function(products) {
             console.log('✓ Products loaded:', products.length);
+            console.log('Products data:', products);
             
             const tbody = $('#inventory_stock_list');
+            if (!tbody.length) {
+                console.error('❌ Table body not found: #inventory_stock_list');
+                return;
+            }
+            
             tbody.empty();
             
-            if (products.length === 0) {
+            if (!products || products.length === 0) {
                 tbody.append(`
                     <tr>
                         <td colspan="7" style="text-align: center; padding: 40px;">
@@ -3177,36 +3322,75 @@ function loadInventoryStock() {
                     </tr>
                 `);
             } else {
-                products.forEach(function(product) {
-                    const imgSrc = product.img ? img_path + product.img : 'assets/images/no-image.png';
-                    const stock = product.stock || 0;
-                    // Color coding: < 5 = red, 5-10 = orange, > 10 = green
-                    const stockClass = stock < 5 ? 'label-danger' : (stock <= 10 ? 'label-warning' : 'label-success');
+                try {
+                    products.forEach(function(product) {
+                        if (!product) return;
+                        
+                        const imgSrc = product.img ? img_path + product.img : 'assets/images/no-image.png';
+                        // Use quantity field for stock display (stock is a flag, quantity is the actual stock count)
+                        const stock = parseInt(product.quantity) || 0;
+                        // Color coding: < 5 = red, 5-10 = orange, > 10 = green
+                        const stockClass = stock < 5 ? 'label-danger' : (stock <= 10 ? 'label-warning' : 'label-success');
+                        
+                        const productName = product.name || 'Unknown';
+                        const productBarcode = product.barcode || 'N/A';
+                        const categoryName = product.category_name || 'N/A';
+                        const productPrice = parseFloat(product.price) || 0;
+                        const productId = product._id || 0;
+                        
+                        const row = `
+                            <tr>
+                                <td><img src="${imgSrc}" alt="${productName}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
+                                <td><strong>${productName}</strong></td>
+                                <td>${productBarcode}</td>
+                                <td>${categoryName}</td>
+                                <td><span class="label ${stockClass}" style="font-size: 14px; padding: 6px 12px;">${stock}</span></td>
+                                <td>${productPrice.toFixed(2)} ${currencySymbol}</td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm waves-effect edit-stock" data-id="${productId}" data-name="${productName}" data-stock="${stock}">
+                                        <i class="fa fa-edit"></i> Edit Stock
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.append(row);
+                    });
                     
-                    const row = `
+                    console.log('✓ Inventory stock table populated with', products.length, 'products');
+                    
+                    // Update stats if element exists (optional)
+                    if ($('#total_products_count').length) {
+                        $('#total_products_count').text(products.length);
+                    }
+                } catch (e) {
+                    console.error('Error populating inventory table:', e);
+                    tbody.append(`
                         <tr>
-                            <td><img src="${imgSrc}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
-                            <td><strong>${product.name}</strong></td>
-                            <td>${product.barcode || 'N/A'}</td>
-                            <td>${product.category_name || 'N/A'}</td>
-                            <td><span class="label ${stockClass}" style="font-size: 14px; padding: 6px 12px;">${stock}</span></td>
-                            <td>${product.price} ${currencySymbol}</td>
-                            <td>
-                                <button class="btn btn-warning btn-sm waves-effect edit-stock" data-id="${product._id}" data-name="${product.name}" data-stock="${stock}">
-                                    <i class="fa fa-edit"></i> Edit Stock
-                                </button>
+                            <td colspan="7" style="text-align: center; padding: 20px; color: red;">
+                                Error displaying products: ${e.message}
                             </td>
                         </tr>
-                    `;
-                    tbody.append(row);
-                });
-                
-                // Update stats
-                $('#total_products_count').text(products.length);
+                    `);
+                }
             }
         },
-        error: function(error) {
-            console.error('Error loading inventory:', error);
+        error: function(xhr, status, error) {
+            console.error('Error loading inventory:', {
+                status: status,
+                error: error,
+                responseText: xhr.responseText,
+                statusCode: xhr.status
+            });
+            const tbody = $('#inventory_stock_list');
+            if (tbody.length) {
+                tbody.empty().append(`
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 20px; color: red;">
+                            Error loading inventory: ${error || 'Unknown error'}
+                        </td>
+                    </tr>
+                `);
+            }
             Swal.fire('Error', 'Failed to load inventory', 'error');
         }
     });
@@ -3507,7 +3691,7 @@ $('#addPurchaseForm').submit(function(e) {
         }
         
         items.push({
-            productId: productId,
+            productId: parseInt(productId), // Ensure it's an integer
             productName: productName,
             quantity: quantity,
             buyingPrice: buyingPrice
@@ -3529,7 +3713,20 @@ $('#addPurchaseForm').submit(function(e) {
         totalAmount: totalAmount
     };
     
-    console.log('Purchase data:', purchaseData);
+    console.log('═══════════════════════════════════════════════════');
+    console.log('📤 SENDING PURCHASE DATA TO API');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('Purchase data:', JSON.stringify(purchaseData, null, 2));
+    console.log('API URL:', api + 'purchases/add');
+    console.log('Items details:');
+    purchaseData.items.forEach((item, idx) => {
+        console.log(`  Item ${idx + 1}:`);
+        console.log(`    - productId: ${item.productId} (type: ${typeof item.productId})`);
+        console.log(`    - productName: ${item.productName}`);
+        console.log(`    - quantity: ${item.quantity} (type: ${typeof item.quantity})`);
+        console.log(`    - buyingPrice: ${item.buyingPrice}`);
+    });
+    console.log('═══════════════════════════════════════════════════\n');
     
     $('.loading').show();
     
@@ -3539,7 +3736,14 @@ $('#addPurchaseForm').submit(function(e) {
         contentType: 'application/json',
         data: JSON.stringify(purchaseData),
         success: function(response) {
-            console.log('Purchase added:', response);
+            console.log('═══════════════════════════════════════════════════');
+            console.log('✅ PURCHASE API RESPONSE RECEIVED');
+            console.log('═══════════════════════════════════════════════════');
+            console.log('Response:', JSON.stringify(response, null, 2));
+            if (response.warnings && response.warnings.length > 0) {
+                console.warn('⚠️  WARNINGS:', response.warnings);
+            }
+            console.log('═══════════════════════════════════════════════════\n');
             $('.loading').hide();
             
             Swal.fire({
@@ -3551,7 +3755,22 @@ $('#addPurchaseForm').submit(function(e) {
             });
             
             $('#addPurchaseModal').modal('hide');
-            loadInventoryPurchases();
+            
+            // Reset form
+            $('#addPurchaseForm')[0].reset();
+            $('#purchase_items_container').empty();
+            purchaseItemCounter = 0;
+            $('#purchase_total_amount').text('0 ' + ((typeof settings !== 'undefined' && settings.symbol) ? settings.symbol : 'DH'));
+            
+            // Always reload both views after a short delay to ensure database write is complete
+            setTimeout(function() {
+                // Reload purchase history if on history tab
+                if ($('#history_view').is(':visible')) {
+                    loadPurchaseHistory();
+                }
+                // Always reload stock view to show updated quantities
+                loadInventoryStock();
+            }, 500);
         },
         error: function(error) {
             console.error('Error adding purchase:', error);
@@ -3591,7 +3810,12 @@ $(document).on('click', '.delete-purchase', function() {
                         showConfirmButton: false
                     });
                     
-                    loadInventoryPurchases();
+                    // Reload purchase history if on history tab, otherwise reload stock
+                    if ($('#history_view').is(':visible')) {
+                        loadPurchaseHistory();
+                    } else {
+                        loadInventoryStock();
+                    }
                 },
                 error: function(error) {
                     console.error('Error deleting purchase:', error);
@@ -3601,6 +3825,806 @@ $(document).on('click', '.delete-purchase', function() {
         }
     });
 });
+
+// ====================================
+// DASHBOARD PAGE MANAGEMENT
+// ====================================
+
+// Click handler for Dashboard sidebar button
+$('#sidebar-dashboard').off('click').on('click', function(e) {
+    e.preventDefault();
+    console.log('Dashboard sidebar clicked - loading dashboard...');
+    
+    // Hide all other views
+    $('#pos_view').hide();
+    $('#transactions_view').hide();
+    $('#products_page').hide();
+    $('#inventory_page').hide();
+    $('#settings_page').hide();
+    $('#categories_page').hide();
+    
+    // Show dashboard page with proper margin for sidebar
+    $('#dashboard_page').show().css('margin-left', '250px');
+    $('#transactions_sidebar').show();
+    $('.hide-on-pos').show();
+    
+    console.log('Dashboard page should be visible now');
+    
+    // Load dashboard data
+    loadDashboard();
+});
+
+// Click handler for Transactions sidebar button
+$('#sidebar-transactions').off('click').on('click', function(e) {
+    e.preventDefault();
+    console.log('Transactions sidebar clicked - loading transactions...');
+    
+    // Hide all other views
+    $('#pos_view').hide();
+    $('#products_page').hide();
+    $('#inventory_page').hide();
+    $('#settings_page').hide();
+    $('#dashboard_page').hide();
+    $('#categories_page').hide();
+    $('#pointofsale').show();
+    $('#transactions_view').show();
+    
+    // Show sidebar and adjust layout
+    $('#transactions_sidebar').fadeIn(300);
+    $('#transactions_view').css('margin-left', '250px');
+    
+    // Hide navbar elements (they're now in sidebar)
+    $('.hide-on-pos').hide();
+    
+    // Hide Open Tabs and Customer Orders buttons on transactions page
+    $('.hide-on-trans').hide();
+    
+    // Load transactions
+    loadTransactions();
+    loadUserList();
+    
+    console.log('Transactions page should be visible now');
+});
+
+// Load dashboard statistics
+function loadDashboard() {
+    console.log('Loading dashboard statistics...');
+    
+    const currencySymbol = (typeof settings !== 'undefined' && settings.symbol) ? settings.symbol : 'DH';
+    
+    // Load transactions for statistics
+    let start_date = new Date();
+    start_date.setDate(start_date.getDate() - 30); // Last 30 days
+    let end_date = new Date();
+    
+    const startDateStr = start_date.toISOString().split('T')[0];
+    const endDateStr = end_date.toISOString().split('T')[0];
+    
+    let query = `by-date?start=${startDateStr}&end=${endDateStr}&user=all&status=1&till=all`;
+    
+    $.get(api + query, function (transactions) {
+        let totalSales = 0;
+        let totalTransactions = 0;
+        let totalItems = 0;
+        const recentTransactions = [];
+        
+        if (transactions && transactions.length > 0) {
+            transactions.forEach((trans) => {
+                totalSales += parseFloat(trans.total) || 0;
+                totalTransactions++;
+                
+                if (trans.items && Array.isArray(trans.items)) {
+                    trans.items.forEach(item => {
+                        totalItems += parseFloat(item.quantity) || 0;
+                    });
+                }
+                
+                // Get recent transactions (last 10)
+                if (recentTransactions.length < 10) {
+                    recentTransactions.push(trans);
+                }
+            });
+        }
+        
+        // Update statistics cards
+        $('#dashboard_total_sales').text(totalSales.toFixed(2) + ' ' + currencySymbol);
+        $('#dashboard_total_transactions').text(totalTransactions);
+        $('#dashboard_total_items').text(totalItems);
+        
+        // Load total products
+        $.get(api + 'inventory/all', function (products) {
+            const totalProducts = products && products.length ? products.length : 0;
+            $('#dashboard_total_products').text(totalProducts);
+        }).fail(function() {
+            $('#dashboard_total_products').text('0');
+        });
+        
+        // Update recent transactions table
+        const tbody = $('#dashboard_transactions_list');
+        tbody.empty();
+        
+        if (recentTransactions.length > 0) {
+            recentTransactions.forEach((trans) => {
+                const date = new Date(trans.date);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                const paymentMethod = trans.method == 1 ? 'Cash' : (trans.method == 3 ? 'Card' : 'N/A');
+                const cashierName = trans.user_name || 'N/A';
+                
+                const row = `
+                    <tr>
+                        <td>${trans.invoice || 'N/A'}</td>
+                        <td>${dateStr}</td>
+                        <td>${parseFloat(trans.total || 0).toFixed(2)} ${currencySymbol}</td>
+                        <td>${paymentMethod}</td>
+                        <td>${cashierName}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+        } else {
+            tbody.append('<tr><td colspan="5" style="text-align: center; padding: 20px;">No transactions found</td></tr>');
+        }
+        
+        console.log('✓ Dashboard loaded');
+    }).fail(function(error) {
+        console.error('Error loading dashboard:', error);
+        $('#dashboard_transactions_list').html('<tr><td colspan="5" style="text-align: center; padding: 20px; color: red;">Error loading transactions</td></tr>');
+    });
+}
+
+// ====================================
+// SETTINGS PAGE MANAGEMENT
+// ====================================
+
+// Click handler for Settings sidebar button
+$('#sidebar-settings').off('click').on('click', function(e) {
+    e.preventDefault();
+    console.log('Settings sidebar clicked - loading settings page...');
+    
+    // Hide all other views
+    $('#pos_view').hide();
+    $('#transactions_view').hide();
+    $('#products_page').hide();
+    $('#inventory_page').hide();
+    $('#dashboard_page').hide();
+    $('#categories_page').hide();
+    
+    // Show settings page with proper margin for sidebar
+    $('#settings_page').show().css('margin-left', '250px');
+    $('#transactions_sidebar').show();
+    $('.hide-on-pos').show();
+    
+    console.log('Settings page should be visible now');
+    
+    // Load settings data
+    loadSettingsPage();
+});
+
+// Load settings data into the page
+function loadSettingsPage() {
+    console.log('Loading settings data...');
+    
+    $.get(api + 'settings/get', function (data) {
+        if (data && data.settings) {
+            const s = data.settings;
+            
+            // Set application type
+            $("#settings_app option").filter(function () {
+                return $(this).text() == (s.app || 'Standalone Point of Sale');
+            }).prop("selected", true);
+            
+            // Check if network settings should be shown
+            if (s.app == 'Network Point of Sale Terminal') {
+                $('#net_settings_form_page').show();
+                $('#settings_form_page').hide();
+                
+                // Load network settings if available
+                if (platform) {
+                    $("#settings_ip").val(platform.ip || '');
+                    $("#settings_till").val(platform.till || '');
+                }
+                
+                macaddress.one(function (err, mac) {
+                    $("#settings_mac").val(mac || '');
+                });
+            } else {
+                $('#net_settings_form_page').hide();
+                $('#settings_form_page').show();
+                
+                // Load regular settings
+                $("#settings_id_page").val("1");
+                $("#settings_store").val(s.store || '');
+                $("#settings_address_one").val(s.address_one || '');
+                $("#settings_address_two").val(s.address_two || '');
+                $("#settings_contact").val(s.contact || '');
+                $("#settings_tax").val(s.tax || '');
+                $("#settings_symbol").val(s.symbol || '$');
+                $("#settings_percentage").val(s.percentage || '0');
+                $("#settings_footer").val(s.footer || '');
+                $("#logo_img_page").val(s.img || '');
+                
+                if (s.charge_tax == 'on') {
+                    $('#settings_charge_tax').prop("checked", true);
+                } else {
+                    $('#settings_charge_tax').prop("checked", false);
+                }
+                
+                // Handle logo display
+                if (s.img && s.img != "") {
+                    $('#logoname_page').hide();
+                    $('#current_logo_page').html(`<img src="${img_path + s.img}" alt="Logo" style="max-width: 200px; max-height: 100px; border: 1px solid #ddd; padding: 5px;">`);
+                    $('#rmv_logo_page').show();
+                } else {
+                    $('#logoname_page').show();
+                    $('#current_logo_page').html('');
+                    $('#rmv_logo_page').hide();
+                }
+            }
+            
+            console.log('✓ Settings loaded into page');
+        } else {
+            console.log('No settings found, showing default form');
+            $('#net_settings_form_page').hide();
+            $('#settings_form_page').show();
+        }
+    }).fail(function(error) {
+        console.error('Error loading settings:', error);
+        Swal.fire('Error', 'Failed to load settings', 'error');
+    });
+}
+
+// Application type change handler
+$('#settings_app').change(function () {
+    if ($(this).find('option:selected').text() == 'Network Point of Sale Terminal') {
+        $('#net_settings_form_page').show(500);
+        $('#settings_form_page').hide(500);
+        macaddress.one(function (err, mac) {
+            $("#settings_mac").val(mac || '');
+        });
+    } else {
+        $('#net_settings_form_page').hide(500);
+        $('#settings_form_page').show(500);
+    }
+});
+
+// Remove logo handler
+$('#rmv_logo_page').click(function () {
+    $('#remove_logo_page').val("1");
+    $('#current_logo_page').hide(500);
+    $(this).hide(500);
+    $('#logoname_page').show(500);
+});
+
+// Settings form submission
+$('#settings_form_page').on('submit', function (e) {
+    e.preventDefault();
+    let formData = $(this).serializeObject();
+    let mac_address;
+
+    api = 'http://' + host + ':' + port + '/api/';
+
+    macaddress.one(function (err, mac) {
+        mac_address = mac;
+    });
+
+    formData['app'] = $('#settings_app').find('option:selected').text();
+    formData['mac'] = mac_address;
+    formData['till'] = 1;
+
+    $('#settings_form_page').append('<input type="hidden" name="app" value="' + formData.app + '" />');
+
+    if (formData.percentage != "" && !$.isNumeric(formData.percentage)) {
+        Swal.fire(
+            'Oops!',
+            'Please make sure the tax value is a number',
+            'warning'
+        );
+    } else {
+        storage.set('settings', formData);
+
+        $(this).attr('action', api + 'settings/post');
+        $(this).attr('method', 'POST');
+
+        $(this).ajaxSubmit({
+            contentType: 'application/json',
+            success: function (response) {
+                Swal.fire(
+                    'Success!',
+                    'Settings saved successfully!',
+                    'success'
+                ).then(() => {
+                    ipcRenderer.send('app-reload', '');
+                });
+            }, 
+            error: function (data) {
+                console.error('Error saving settings:', data);
+                Swal.fire('Error', 'Failed to save settings', 'error');
+            }
+        });
+    }
+});
+
+// Network settings form submission
+$('#net_settings_form_page').on('submit', function (e) {
+    e.preventDefault();
+    let formData = $(this).serializeObject();
+
+    if (formData.till == 0 || formData.till == 1) {
+        Swal.fire(
+            'Oops!',
+            'Please enter a number greater than 1.',
+            'warning'
+        );
+    } else {
+        if (isNumeric(formData.till)) {
+            formData['app'] = $('#settings_app').find('option:selected').text();
+            storage.set('settings', formData);
+            Swal.fire(
+                'Success!',
+                'Network settings saved successfully!',
+                'success'
+            ).then(() => {
+                ipcRenderer.send('app-reload', '');
+            });
+        } else {
+            Swal.fire(
+                'Oops!',
+                'Till number must be a number!',
+                'warning'
+            );
+        }
+    }
+});
+
+// Handle logo file selection
+$('#logoname_page').change(function() {
+    if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            $('#current_logo_page').html(`<img src="${e.target.result}" alt="Logo preview" style="max-width: 200px; max-height: 100px; border: 1px solid #ddd; padding: 5px;">`);
+            $('#rmv_logo_page').show();
+            $('#logoname_page').hide();
+        };
+        reader.readAsDataURL(this.files[0]);
+    }
+});
+
+// ====================================
+// CATEGORIES PAGE MANAGEMENT
+// ====================================
+
+let categoriesManagementTable = null;
+let categoriesData = [];
+let currentCategoryView = localStorage.getItem('categoriesView') || 'cards';
+
+// Click handler for Categories sidebar button
+$('#sidebar-categories').off('click').on('click', function(e) {
+    e.preventDefault();
+    console.log('Categories sidebar clicked - loading categories page...');
+    
+    // Hide all other views
+    $('#pos_view').hide();
+    $('#transactions_view').hide();
+    $('#products_page').hide();
+    $('#inventory_page').hide();
+    $('#settings_page').hide();
+    $('#dashboard_page').hide();
+    
+    // Show categories page with proper margin for sidebar
+    $('#categories_page').show().css('margin-left', '250px');
+    $('#transactions_sidebar').show();
+    $('.hide-on-pos').show();
+    
+    console.log('Categories page should be visible now');
+    
+    // Set initial view state
+    if (currentCategoryView === 'cards') {
+        $('#viewCategoryCards').removeClass('btn-default').addClass('btn-info');
+        $('#viewCategoryTable').removeClass('btn-info').addClass('btn-default');
+    } else {
+        $('#viewCategoryTable').removeClass('btn-default').addClass('btn-info');
+        $('#viewCategoryCards').removeClass('btn-info').addClass('btn-default');
+    }
+    
+    // Load categories
+    setTimeout(function() {
+        loadCategoriesManagement();
+    }, 100);
+});
+
+// Load categories for management page
+function loadCategoriesManagement() {
+    console.log('Loading categories for management...');
+    
+    $.get(api + 'categories/all', function (categories) {
+        if (!categories || !Array.isArray(categories)) {
+            console.error('Invalid categories data:', categories);
+            categoriesData = [];
+        } else {
+            categoriesData = categories;
+        }
+        
+        renderCategoriesView();
+    }).fail(function(error) {
+        console.error('Error loading categories:', error);
+        categoriesData = [];
+        renderCategoriesView();
+    });
+}
+
+// Render categories view (cards or table)
+function renderCategoriesView() {
+    if (currentCategoryView === 'cards') {
+        renderCategoryCardsView();
+    } else {
+        renderCategoryTableView();
+    }
+}
+
+// View toggle handlers
+$('#viewCategoryCards').click(function() {
+    currentCategoryView = 'cards';
+    localStorage.setItem('categoriesView', 'cards');
+    $('#viewCategoryCards').removeClass('btn-default').addClass('btn-info');
+    $('#viewCategoryTable').removeClass('btn-info').addClass('btn-default');
+    renderCategoriesView();
+});
+
+$('#viewCategoryTable').click(function() {
+    currentCategoryView = 'table';
+    localStorage.setItem('categoriesView', 'table');
+    $('#viewCategoryTable').removeClass('btn-default').addClass('btn-info');
+    $('#viewCategoryCards').removeClass('btn-info').addClass('btn-default');
+    renderCategoriesView();
+});
+
+// Render Cards View
+function renderCategoryCardsView() {
+    $('#categories_table_view').hide();
+    $('#categories_cards_view').show();
+    
+    const container = $('#categories_cards_container');
+    container.empty();
+    
+    if (categoriesData.length === 0) {
+        container.html('<div class="col-md-12 text-center"><p>No categories found</p></div>');
+        return;
+    }
+    
+    categoriesData.forEach(function(category) {
+        const imgSrc = category.img ? img_path + category.img : 'assets/images/default.jpg';
+        
+        const cardWrapper = $(`
+            <div class="col-lg-3 col-md-4 col-sm-6 col-xs-12" style="margin-bottom: 15px;">
+                <div class="card-box" style="padding: 0; height: 200px; display: flex; flex-direction: column; box-shadow: 0 2px 8px rgba(0,0,0,0.12); border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; transition: all 0.3s ease;">
+                    <!-- Image Section -->
+                    <div style="flex: 0 0 60%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                        <img src="${imgSrc}" alt="${category.name}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    
+                    <!-- Content Section -->
+                    <div style="flex: 1; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; background: white;">
+                        <div>
+                            <h5 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; text-align: center; color: #333;">${category.name}</h5>
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px; margin-top: 6px;">
+                            <button class="btn btn-info btn-sm edit-category waves-effect" data-id="${category._id}" style="padding: 6px 8px; font-size: 12px; flex: 1; border-radius: 4px;">
+                                <i class="fa fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger btn-sm delete-category waves-effect" data-id="${category._id}" style="padding: 6px 8px; font-size: 12px; flex: 1; border-radius: 4px;">
+                                <i class="fa fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+        
+        container.append(cardWrapper);
+    });
+    
+    console.log('Category cards rendered:', categoriesData.length);
+}
+
+// Render Table View
+function renderCategoryTableView() {
+    $('#categories_cards_view').hide();
+    $('#categories_table_view').show();
+    
+    // Destroy existing DataTable if it exists
+    if (categoriesManagementTable) {
+        categoriesManagementTable.destroy();
+        categoriesManagementTable = null;
+    }
+    
+    const tbody = $('#categories_management_list');
+    tbody.empty();
+    
+    if (categoriesData.length === 0) {
+        tbody.html('<tr><td colspan="3" style="text-align: center;">No categories found</td></tr>');
+        return;
+    }
+    
+    categoriesData.forEach(function(category) {
+        const imgSrc = category.img ? img_path + category.img : 'assets/images/default.jpg';
+        
+        const row = `
+            <tr data-category-id="${category._id}">
+                <td><img src="${imgSrc}" alt="${category.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
+                <td><strong>${category.name}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-info edit-category" data-id="${category._id}">
+                        <i class="fa fa-edit"></i> <span data-i18n="btn.edit">Edit</span>
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-category" data-id="${category._id}">
+                        <i class="fa fa-trash"></i> <span data-i18n="btn.delete">Delete</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(row);
+    });
+    
+    // Initialize DataTable
+    categoriesManagementTable = $('#categoriesManagementTable').DataTable({
+        "order": [[1, "asc"]],
+        "autoWidth": false,
+        "info": true,
+        "ordering": true,
+        "paging": true,
+        "pageLength": 10,
+        "language": window.getDataTablesLanguage ? window.getDataTablesLanguage() : {}
+    });
+    
+    console.log('Category table rendered:', categoriesData.length);
+}
+
+// Add New Category Button
+$('#addNewCategory').click(function() {
+    // Reset form
+    $('#categoryManagementForm')[0].reset();
+    $('#cm_category_id').val('');
+    $('#cm_img').val('');
+    $('#cm_remove_img').val('');
+    $('#cm_current_img').html('<p style="color: #999; margin: 0;">No image selected</p>');
+    $('#cm_rmv_img').hide();
+    $('#cm_imagename').show();
+    $('#categoryModalTitle').html('<i class="glyphicon glyphicon-th"></i> <span data-i18n="product.category">Add Category</span>');
+    
+    $('#categoryManagementModal').modal('show');
+});
+
+// Edit Category Button Handler
+$(document).on('click', '.edit-category', function() {
+    const categoryId = $(this).data('id');
+    const category = categoriesData.find(c => c._id == categoryId);
+    
+    if (!category) {
+        Swal.fire('Error', 'Category not found', 'error');
+        return;
+    }
+    
+    // Fill form with category data
+    $('#cm_category_id').val(category._id);
+    $('#cm_categoryName').val(category.name);
+    $('#cm_img').val(category.img || '');
+    $('#cm_remove_img').val('');
+    
+    // Handle image display
+    if (category.img && category.img != "") {
+        const imgSrc = img_path + category.img;
+        $('#cm_current_img').html(`<img src="${imgSrc}" alt="${category.name}" style="max-width: 100%; max-height: 180px; object-fit: contain;">`);
+        $('#cm_rmv_img').show();
+        $('#cm_imagename').hide();
+    } else {
+        $('#cm_current_img').html('<p style="color: #999; margin: 0;">No image selected</p>');
+        $('#cm_rmv_img').hide();
+        $('#cm_imagename').show();
+    }
+    
+    $('#categoryModalTitle').html('<i class="glyphicon glyphicon-th"></i> <span data-i18n="product.category">Edit Category</span>');
+    $('#categoryManagementModal').modal('show');
+});
+
+// Delete Category Button Handler
+$(document).on('click', '.delete-category', function() {
+    const categoryId = $(this).data('id');
+    const category = categoriesData.find(c => c._id == categoryId);
+    
+    if (!category) {
+        Swal.fire('Error', 'Category not found', 'error');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Are you sure?',
+        text: `Delete category "${category.name}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.value) {
+            $.ajax({
+                url: api + 'categories/category/' + categoryId,
+                type: 'DELETE',
+                success: function() {
+                    Swal.fire('Deleted!', 'Category has been deleted.', 'success');
+                    loadCategoriesManagement();
+                    loadCategories(); // Reload categories for product dropdown
+                },
+                error: function(error) {
+                    console.error('Error deleting category:', error);
+                    Swal.fire('Error', 'Failed to delete category', 'error');
+                }
+            });
+        }
+    });
+});
+
+// Remove Category Image Handler
+$('#cm_rmv_img').click(function() {
+    $('#cm_remove_img').val("1");
+    $('#cm_current_img').html('<p style="color: #999; margin: 0;">No image selected</p>');
+    $(this).hide();
+    $('#cm_imagename').show();
+});
+
+// Handle Category Image File Selection
+$('#cm_imagename').change(function() {
+    if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            $('#cm_current_img').html(`<img src="${e.target.result}" alt="Category preview" style="max-width: 100%; max-height: 180px; object-fit: contain;">`);
+            $('#cm_rmv_img').show();
+            $('#cm_imagename').hide();
+        };
+        reader.readAsDataURL(this.files[0]);
+    }
+});
+
+// Category Form Submission
+$('#categoryManagementForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    const categoryId = $('#cm_category_id').val();
+    const method = categoryId ? 'PUT' : 'POST';
+    
+    $(this).attr('action', api + 'categories/category');
+    $(this).attr('method', method);
+    
+    $(this).ajaxSubmit({
+        success: function(response) {
+            Swal.fire('Success!', 'Category saved successfully!', 'success');
+            $('#categoryManagementModal').modal('hide');
+            loadCategoriesManagement();
+            loadCategories(); // Reload categories for product dropdown
+        },
+        error: function(error) {
+            console.error('Error saving category:', error);
+            Swal.fire('Error', 'Failed to save category', 'error');
+        }
+    });
+});
+
+// ====================================
+// POS DATE AND CALCULATOR
+// ====================================
+
+// Update POS current date
+function updatePOSDate() {
+    const now = new Date();
+    const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    };
+    const dateString = now.toLocaleDateString('en-US', options);
+    $('#pos_current_date').text(dateString);
+}
+
+// Calculator functionality
+let calculatorValue = '0';
+let calculatorPreviousValue = null;
+let calculatorOperation = null;
+let calculatorWaitingForNewValue = false;
+
+// Calculator button click handler
+$('#calculator_btn').click(function() {
+    $('#calculatorModal').modal('show');
+    calculatorValue = '0';
+    calculatorPreviousValue = null;
+    calculatorOperation = null;
+    calculatorWaitingForNewValue = false;
+    $('#calculator_display').val('0');
+});
+
+// Calculator button clicks
+$(document).on('click', '.calculator-btn', function() {
+    const value = $(this).data('value');
+    
+    if (value === 'C') {
+        // Clear all
+        calculatorValue = '0';
+        calculatorPreviousValue = null;
+        calculatorOperation = null;
+        calculatorWaitingForNewValue = false;
+        $('#calculator_display').val('0');
+    } else if (value === 'CE') {
+        // Clear entry
+        calculatorValue = '0';
+        calculatorWaitingForNewValue = false;
+        $('#calculator_display').val('0');
+    } else if (value === '=') {
+        // Calculate result
+        if (calculatorPreviousValue !== null && calculatorOperation) {
+            const result = calculate(parseFloat(calculatorPreviousValue), parseFloat(calculatorValue), calculatorOperation);
+            calculatorValue = result.toString();
+            calculatorPreviousValue = null;
+            calculatorOperation = null;
+            calculatorWaitingForNewValue = true;
+            $('#calculator_display').val(formatNumber(calculatorValue));
+        }
+    } else if (['+', '-', '*', '/', '%'].includes(value)) {
+        // Operation button
+        if (calculatorPreviousValue === null) {
+            calculatorPreviousValue = calculatorValue;
+        } else if (!calculatorWaitingForNewValue) {
+            // Calculate previous operation first
+            const result = calculate(parseFloat(calculatorPreviousValue), parseFloat(calculatorValue), calculatorOperation);
+            calculatorPreviousValue = result.toString();
+            calculatorValue = result.toString();
+            $('#calculator_display').val(formatNumber(calculatorValue));
+        }
+        calculatorOperation = value;
+        calculatorWaitingForNewValue = true;
+    } else {
+        // Number or decimal point
+        if (calculatorWaitingForNewValue) {
+            calculatorValue = value;
+            calculatorWaitingForNewValue = false;
+        } else {
+            if (value === '.' && calculatorValue.includes('.')) {
+                return; // Don't allow multiple decimal points
+            }
+            calculatorValue = calculatorValue === '0' ? value : calculatorValue + value;
+        }
+        $('#calculator_display').val(formatNumber(calculatorValue));
+    }
+});
+
+// Calculate function
+function calculate(a, b, operation) {
+    switch(operation) {
+        case '+':
+            return a + b;
+        case '-':
+            return a - b;
+        case '*':
+            return a * b;
+        case '/':
+            return b !== 0 ? a / b : 0;
+        case '%':
+            return a % b;
+        default:
+            return b;
+    }
+}
+
+// Format number for display
+function formatNumber(num) {
+    const numStr = num.toString();
+    // Remove trailing zeros after decimal point
+    if (numStr.includes('.')) {
+        return numStr.replace(/\.?0+$/, '');
+    }
+    return numStr;
+}
 
 // Language Selector Handler
 $(document).ready(function() {

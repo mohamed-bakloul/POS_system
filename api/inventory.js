@@ -10,10 +10,25 @@ const Datastore = require('nedb');
 const async = require('async');
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
+
+// Ensure database directory exists
+const dbPath = path.join(process.env.APPDATA, 'POS', 'server', 'databases');
+if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(dbPath, { recursive: true });
+    console.log('Created database directory:', dbPath);
+}
+
+// Ensure uploads directory exists
+const uploadsPath = path.join(process.env.APPDATA, 'POS', 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log('Created uploads directory:', uploadsPath);
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-    destination: process.env.APPDATA + '/POS/uploads',
+    destination: uploadsPath,
     filename: function(req, file, callback) {
         callback(null, Date.now() + '.jpg');
     }
@@ -25,18 +40,43 @@ app.use(bodyParser.json());
 
 module.exports = app;
 
-// Initialize databases
+// Initialize databases - let NeDB create files naturally
+const inventoryDBFile = path.join(dbPath, 'inventory.db');
+const categoryDBFile = path.join(dbPath, 'categories.db');
+
+// Don't pre-create files - let NeDB handle it
+// Just ensure directory exists (done above)
+
 const inventoryDB = new Datastore({
-    filename: process.env.APPDATA + '/POS/server/databases/inventory.db',
-    autoload: true
+    filename: inventoryDBFile,
+    autoload: true,
+    onload: function(err) {
+        if (err) {
+            console.error('Error loading inventory database:', err);
+        } else {
+            console.log('Inventory database loaded successfully');
+        }
+    }
 });
 
 const categoryDB = new Datastore({
-    filename: process.env.APPDATA + '/POS/server/databases/categories.db',
-    autoload: true
+    filename: categoryDBFile,
+    autoload: true,
+    onload: function(err) {
+        if (err) {
+            console.error('Error loading categories database:', err);
+        } else {
+            console.log('Categories database loaded successfully');
+        }
+    }
 });
 
+// Files will be created automatically by NeDB on first write operation
+
 inventoryDB.ensureIndex({ fieldName: '_id', unique: true });
+
+// Export inventoryDB so other modules can use the same instance
+module.exports.inventoryDB = inventoryDB;
 
 /**
  * Health check endpoint
@@ -180,7 +220,7 @@ app.post('/save', upload.single('imagename'), async (req, res) => {
 
         // Handle image removal
         if (req.body.remove == 1) {
-            const imagePath = process.env.APPDATA + '/POS/uploads/' + req.body.img;
+            const imagePath = path.join(uploadsPath, req.body.img);
             try {
                 if (fs.existsSync(imagePath)) {
                     fs.unlinkSync(imagePath);
@@ -258,7 +298,7 @@ app.post('/product', upload.single('imagename'), async (req, res) => {
 
         // Handle image removal
         if (req.body.remove == 1) {
-            const imagePath = process.env.APPDATA + '/POS/uploads/' + req.body.img;
+            const imagePath = path.join(uploadsPath, req.body.img);
             try {
                 if (fs.existsSync(imagePath)) {
                     fs.unlinkSync(imagePath);
@@ -410,9 +450,10 @@ app.post('/update-stock', (req, res) => {
         
         console.log(`Updating stock for product ${id}: ${stock} (Reason: ${reason || 'N/A'})`);
         
+        // Update quantity field (not stock - stock is a flag for stock tracking)
         inventoryDB.update(
-            { _id: id },
-            { $set: { stock: parseInt(stock) } },
+            { _id: parseInt(id) },
+            { $set: { quantity: parseInt(stock) } },
             {},
             (err, numReplaced) => {
                 if (err) {
@@ -424,6 +465,7 @@ app.post('/update-stock', (req, res) => {
                     return res.status(404).json({ error: 'Product not found' });
                 }
                 
+                console.log(`✓ Stock updated for product ${id}: ${stock}`);
                 res.json({
                     success: true,
                     message: 'Stock updated successfully',

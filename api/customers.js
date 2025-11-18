@@ -7,16 +7,39 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const Datastore = require('nedb');
+const fs = require('fs');
+const path = require('path');
+
+// Ensure database directory exists
+const dbPath = path.join(process.env.APPDATA, 'POS', 'server', 'databases');
+if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(dbPath, { recursive: true });
+    console.log('Created database directory:', dbPath);
+}
 
 app.use(bodyParser.json());
 
 module.exports = app;
 
-// Initialize database
+// Initialize database - let NeDB create the file naturally
+const customerDBFile = path.join(dbPath, 'customers.db');
+
+// Don't pre-create the file - let NeDB handle it
+// Just ensure directory exists (done above)
+
 const customerDB = new Datastore({
-    filename: process.env.APPDATA + '/POS/server/databases/customers.db',
-    autoload: true
+    filename: customerDBFile,
+    autoload: true,
+    onload: function(err) {
+        if (err) {
+            console.error('Error loading customers database:', err);
+        } else {
+            console.log('Customers database loaded successfully');
+        }
+    }
 });
+
+// File will be created automatically by NeDB on first write operation
 
 customerDB.ensureIndex({ fieldName: '_id', unique: true });
 

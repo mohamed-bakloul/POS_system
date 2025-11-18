@@ -9,10 +9,25 @@ const bodyParser = require('body-parser');
 const Datastore = require('nedb');
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
+
+// Ensure database directory exists
+const dbPath = path.join(process.env.APPDATA, 'POS', 'server', 'databases');
+if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(dbPath, { recursive: true });
+    console.log('Created database directory:', dbPath);
+}
+
+// Ensure uploads directory exists
+const uploadsPath = path.join(process.env.APPDATA, 'POS', 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log('Created uploads directory:', uploadsPath);
+}
 
 // Configure multer for logo uploads
 const storage = multer.diskStorage({
-    destination: process.env.APPDATA + '/POS/uploads',
+    destination: uploadsPath,
     filename: function(req, file, callback) {
         callback(null, Date.now() + '.jpg');
     }
@@ -24,11 +39,25 @@ app.use(bodyParser.json());
 
 module.exports = app;
 
-// Initialize database
+// Initialize database - let NeDB create the file naturally
+const settingsDBFile = path.join(dbPath, 'settings.db');
+
+// Don't pre-create the file - let NeDB handle it
+// Just ensure directory exists (done above)
+
 const settingsDB = new Datastore({
-    filename: process.env.APPDATA + '/POS/server/databases/settings.db',
-    autoload: true
+    filename: settingsDBFile,
+    autoload: true,
+    onload: function(err) {
+        if (err) {
+            console.error('Error loading settings database:', err);
+        } else {
+            console.log('Settings database loaded successfully');
+        }
+    }
 });
+
+// File will be created automatically by NeDB on first write operation
 
 /**
  * Health check endpoint
@@ -80,7 +109,7 @@ app.post('/post', upload.single('imagename'), async (req, res) => {
 
         // Handle image removal
         if (req.body.remove == 1) {
-            const imagePath = process.env.APPDATA + '/POS/uploads/' + req.body.img;
+            const imagePath = path.join(uploadsPath, req.body.img);
             try {
                 if (fs.existsSync(imagePath)) {
                     fs.unlinkSync(imagePath);
